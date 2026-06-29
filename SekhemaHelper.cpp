@@ -71,6 +71,15 @@ public:
             CrystalRoute route;
             uintptr_t panel = 0;
             if (ctx()->Game.IsInGame()) {
+                // Re-arm per-area panel discovery on every area transition so a
+                // fresh trial is found promptly, while a non-trial area is probed
+                // only once (see FindTrialPanel). Cheap counter — no entity scan.
+                uint64_t ac = ctx()->Game.GetAreaChangeCounter();
+                if (ac != m_lastAreaChange) {
+                    m_lastAreaChange = ac;
+                    m_discoverAttempts = 0;
+                    m_noTrialThisArea = false;
+                }
                 panel = FindTrialPanel(floor);
                 if (floor.valid) {
                     res = ReadResources(ctx(), panel);
@@ -105,7 +114,15 @@ private:
     Settings         m_settings;
     bool             m_hotkeyDown = false;
     std::vector<int> m_cachedPath;     // discovered index path from the top UI root
-    int              m_bfsThrottle = 0;
+    // Per-area trial-panel discovery gate. The self-healing BFS walks the game UI
+    // tree (RPM-heavy) and finds NOTHING in a non-trial map, so it must not run
+    // every frame there. Run it at most once per area (after a short settle), then
+    // stand down until the next area change. Real trials resolve via the cheap
+    // cached/primary path with no BFS at all.
+    uint64_t         m_lastAreaChange = 0;
+    int              m_discoverAttempts = 0;   // fast-path misses since area change
+    bool             m_noTrialThisArea = false;
+    static constexpr int kBfsAttemptAt = 6;    // run the one BFS after N misses (~0.9s @ 7Hz)
 
     // Throttled-read cache (see DrawUI).
     SekhemaFloor     m_floor;
@@ -161,7 +178,7 @@ private:
                 SekhemaFloor f = SekhemaReader::Read(n.a, ctx());
                 if (f.valid) { outPath = n.p; outFloor = std::move(f); return n.a; }
             }
-            if (n.d >= 10) continue;
+            if (n.d >= 6) continue;   // panel sits at depth ~2; cap deep walks in non-trial maps
             int cc = ctx()->Ui.Read(n.a).ChildCount;
             if (cc < 0) cc = 0;
             if (cc > 512) cc = 512;
@@ -179,6 +196,11 @@ private:
     // Resolve the trial panel from the top UI root: cached path -> known [1,84]
     // -> throttled BFS discovery. Fills outFloor with the valid graph.
     uintptr_t FindTrialPanel(SekhemaFloor& outFloor) {
+        // Stood down for this area: a full BFS already failed, so there is no trial
+        // panel here. Skip all probing until the next area change re-arms us. This
+        // is what keeps a non-trial map from re-walking the UI tree every frame.
+        if (m_noTrialThisArea) return 0;
+
         uintptr_t root = WalkUpToRoot(ctx()->Ui.GetUiRoot());
         if (!LooksHeap(root)) return 0;
 
@@ -186,22 +208,25 @@ private:
             uintptr_t panel = ctx()->Ui.FollowPath(root, m_cachedPath.data(),
                                                    static_cast<int>(m_cachedPath.size()));
             SekhemaFloor f = SekhemaReader::Read(panel, ctx());
-            if (f.valid) { outFloor = std::move(f); return panel; }
+            if (f.valid) { m_discoverAttempts = 0; outFloor = std::move(f); return panel; }
         }
 
         // CE-confirmed primary path (top root -> child[1] -> child[84] = panel).
         static const int kPrimary[] = {1, 84};
         uintptr_t panel = ctx()->Ui.FollowPath(root, kPrimary, 2);
         SekhemaFloor f = SekhemaReader::Read(panel, ctx());
-        if (f.valid) { m_cachedPath.assign(kPrimary, kPrimary + 2); outFloor = std::move(f); return panel; }
+        if (f.valid) { m_cachedPath.assign(kPrimary, kPrimary + 2); m_discoverAttempts = 0; outFloor = std::move(f); return panel; }
 
-        // Self-healing discovery if indices ever drift (throttled — BFS is heavy).
-        if (++m_bfsThrottle >= 30) {
-            m_bfsThrottle = 0;
+        // Fast paths failed. The fallback BFS walks the whole game UI tree, which is
+        // RPM-heavy and finds nothing in a non-trial map — so run it at most ONCE
+        // per area, after a short settle (lets the UI finish loading on area entry),
+        // then stand down. Real trials never reach here (primary path resolves).
+        if (++m_discoverAttempts == kBfsAttemptAt) {
             std::vector<int> found;
             SekhemaFloor bf;
             uintptr_t bpanel = BfsFindPanel(root, found, bf);
             if (bpanel) { m_cachedPath = std::move(found); outFloor = std::move(bf); return bpanel; }
+            m_noTrialThisArea = true;   // one BFS, nothing here — stop until area change
         }
         return 0;
     }

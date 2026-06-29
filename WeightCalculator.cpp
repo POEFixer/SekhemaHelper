@@ -59,7 +59,7 @@ double RewardWeight(const std::string& reward, const WeightProfile& p, const Sek
 
 double ScoreRoom(const SekhemaRoom& room, const WeightProfile& p,
                  const PlayerDefenses& d, const SekhemaResources& r) {
-    double s = 1000000.0;
+    double s = kRoomScoreBase;
     s += RoomTypeWeight(room.roomType, p);
     s += AfflictionWeight(room.affliction, p, d);
     s += RewardWeight(room.reward, p, r);

@@ -42,8 +42,11 @@ static void DrawOn(ImDrawList* dl, bool large, const TrialEntities& ents, const 
     // Crystals: A* route polyline (decimated) + numbered stops.
     if (s.showCrystals && !route.stops.empty()) {
         ImU32 col = ImGui::ColorConvertFloat4ToU32(s.crystalColor);
+        // Draw EVERY polyline point — when A* falls back to straight legs the polyline
+        // is just [player, stop0, stop1, ...], so skipping points would drop crystals
+        // from the line (it would connect only every other one).
         ImVec2 prevp; bool haveprev = false;
-        for (size_t i = 0; i < route.polyline.size(); i += 2) {
+        for (size_t i = 0; i < route.polyline.size(); ++i) {
             ImVec2 sp;
             if (projG(route.polyline[i].x, route.polyline[i].y, sp)) {
                 if (haveprev) dl->AddLine(prevp, sp, col, 2.0f);

@@ -4,6 +4,12 @@
 
 namespace sekhema {
 
+// Per-room base added to every ScoreRoom result. It keeps a single room's score
+// positive for the 0..10 display normalization, but it is NOT a weight: it must be
+// removed before summing scores along a path, otherwise a longer branch wins on
+// room-count alone (1e6 per extra room) and the configured weights stop mattering.
+inline constexpr double kRoomScoreBase = 1000000.0;
+
 enum class Risk { None, Minor, Moderate, Severe };
 
 struct SekhemaRoom {
@@ -14,7 +20,7 @@ struct SekhemaRoom {
     std::vector<int> connections; // indices into the NEXT layer
     double score     = 0.0;   // raw weight (engine fills; mock supplies directly)
     double normScore = 0.0;   // 0..10 normalized, for display
-    double pathScore = 0.0;   // longest-weighted path value from here (PathFinder)
+    double pathScore = 0.0;   // best onward path value from here, weights only/base-free (PathFinder)
     Risk   risk      = Risk::None;
     bool   onBestPath= false;
     bool   isChosen  = false;   // player has walked into this room (== Choices[layer])

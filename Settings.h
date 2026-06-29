@@ -29,7 +29,7 @@ struct Settings {
     float  poiRadius = 9.0f;
     // Only mark trial objects within this grid distance of the player (all Sekhema
     // floors share one big map, so this keeps markers/route to the current room).
-    float  roomRadius = 300.0f;
+    float  roomRadius = 500.0f;
     // chest content priority: ordered (top=best) + enabled flag
     std::vector<std::pair<std::string,bool>> chestOrder = {
         {"GrandSpectrum", true}, {"RadiusJewels", true}, {"LargeRelic", true},

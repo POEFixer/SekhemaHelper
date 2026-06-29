@@ -34,7 +34,11 @@ void ComputeBestPath(SekhemaFloor& floor) {
                     }
                 }
             }
-            dp[l][r] = room.score + (bestIdx >= 0 ? best : 0.0);
+            // Accumulate WEIGHTS along the path, not raw scores: strip the per-room
+            // base (kRoomScoreBase) or a branch that simply chains through one more
+            // room wins by ~1e6, drowning out the configured weights. (`best` is
+            // already a base-free child path-sum, so it is added as-is.)
+            dp[l][r] = (room.score - kRoomScoreBase) + (bestIdx >= 0 ? best : 0.0);
             floor.layers[l][r].pathScore = dp[l][r];   // for the dashboard's choice ranking
             nextChoice[l][r] = bestIdx;
         }
