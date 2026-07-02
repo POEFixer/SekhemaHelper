@@ -105,7 +105,7 @@ public:
 
         if (m_floor.valid) {
             DrawMapOverlay(m_floor, m_settings, ctx(), m_panel);
-            DrawLargeMapMarkers(m_ents, m_route, m_settings, m_res, ctx());
+            DrawLargeMapMarkers(m_ents, m_route, m_settings, ctx());
         }
         DrawDashboard(m_floor, m_res, m_settings);
     }

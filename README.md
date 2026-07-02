@@ -23,8 +23,8 @@ A modern, card-based dashboard plus on-map overlays:
 - **Map overlay** — best-path frames + risk dots on the trial floor map; and on
   the large map / minimap: a walkable A* crystal-collection route (numbered),
   every reward-cache type (per-type colours, tier-coloured labels with
-  Superior "+" / Prime "++" marks, key-budget highlight ring drawn on top),
-  and ritual portals / sanctum levers. Markers project with correct terrain
+  Superior "+" / Prime "++" marks, white highlight ring drawn on top), and
+  ritual portals / sanctum levers. Markers project with correct terrain
   height, so raised platforms line up with the map.
 - Configurable show/hide hotkey, themed to the host's active UI theme.
 
@@ -60,9 +60,8 @@ In the host Plugins settings tab:
   "Room radius" (all Sekhema floors share one map, so this keeps markers/route
   to the room you're in), and a compact per-cache-type table covering every
   Sekhema chest (Spectrum, Time-Lost, Relics, Jewels, Currency, Maps, armour
-  and weapon caches, pots/urns, ...): show, circle colour, ring participation,
-  and priority order (top = best; with N tier keys, the N best visible chests
-  of that tier get the white ring).
+  and weapon caches, pots/urns, ...): show, circle colour, and Ring — every
+  chest of a Ring-checked type gets a white ring drawn on top.
 
 ## SDK Version
 

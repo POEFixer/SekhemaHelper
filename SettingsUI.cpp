@@ -161,18 +161,18 @@ static void DrawOverlaysTab(Settings& s) {
     ImGui::SetNextItemWidth(140);
     ImGui::SliderFloat("Circle size", &s.chestRadius, 2.0f, 16.0f, "%.0f");
 
-    ImGui::TextDisabled("Ring = white highlight on the best chests within your key budget; top = best.");
+    ImGui::TextDisabled("Ring = white ring on top of every chest of the checked types.");
 
     if (ImGui::SmallButton("Show all")) for (auto& t : s.chestTypes) t.show = true;
     ImGui::SameLine();
     if (ImGui::SmallButton("Hide all")) for (auto& t : s.chestTypes) t.show = false;
     ImGui::SameLine();
     if (ImGui::SmallButton("Reset")) s.chestTypes = DefaultChestTypes();
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Restore default order, colors and flags.");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Restore default colors and flags.");
 
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4.0f, 1.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 1.0f));
-    if (ImGui::BeginTable("chest_types", 5,
+    if (ImGui::BeginTable("chest_types", 4,
             ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit,
             ImVec2(0.0f, 320.0f))) {
         ImGui::TableSetupScrollFreeze(0, 1);
@@ -180,7 +180,6 @@ static void DrawOverlaysTab(Settings& s) {
         ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Cache", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Ring",  ImGuiTableColumnFlags_WidthFixed);
-        ImGui::TableSetupColumn("Order", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableHeadersRow();
         for (size_t i = 0; i < s.chestTypes.size(); ++i) {
             auto& t = s.chestTypes[i];
@@ -192,12 +191,6 @@ static void DrawOverlaysTab(Settings& s) {
                 ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
             ImGui::TableNextColumn(); ImGui::TextUnformatted(info ? info->uiName : t.id.c_str());
             ImGui::TableNextColumn(); ImGui::Checkbox("##hl", &t.highlight);
-            ImGui::TableNextColumn();
-            if (ImGui::ArrowButton("up", ImGuiDir_Up) && i > 0)
-                std::swap(s.chestTypes[i], s.chestTypes[i - 1]);
-            ImGui::SameLine(0.0f, 2.0f);
-            if (ImGui::ArrowButton("dn", ImGuiDir_Down) && i + 1 < s.chestTypes.size())
-                std::swap(s.chestTypes[i], s.chestTypes[i + 1]);
             ImGui::PopID();
         }
         ImGui::EndTable();

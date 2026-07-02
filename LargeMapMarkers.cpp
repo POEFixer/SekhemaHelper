@@ -1,7 +1,6 @@
 #include "LargeMapMarkers.h"
 #include "ChestTypes.h"
 #include <imgui.h>
-#include <algorithm>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -34,7 +33,7 @@ static ImU32 TierLabelColor(int tier) {
 // Draw all markers projected onto one map (large or mini).
 static void DrawOn(ImDrawList* dl, bool large, float playerZ,
                    const TrialEntities& ents, const CrystalRoute& route,
-                   const Settings& s, const SekhemaResources& res, const PluginSDK::Context* ctx) {
+                   const Settings& s, const PluginSDK::Context* ctx) {
     const float pr = large ? s.poiRadius : s.poiRadius * 0.6f;
     const bool labels = large;
 
@@ -81,8 +80,9 @@ static void DrawOn(ImDrawList* dl, bool large, float playerZ,
         }
     }
 
-    // Chests: per-type colors/visibility, tier-colored labels, and the key-budget
-    // highlight ring drawn LAST so it stays visible over tightly packed circles.
+    // Chests: per-type colors/visibility, tier-colored labels, and the highlight
+    // ring drawn LAST so it stays visible over tightly packed circles. Every
+    // chest of a Ring-checked type gets the ring.
     if (s.showChests && !ents.chests.empty()) {
         const float cr = large ? s.chestRadius : s.chestRadius * 0.6f;
 
@@ -90,38 +90,17 @@ static void DrawOn(ImDrawList* dl, bool large, float playerZ,
             for (const auto& t : s.chestTypes) if (t.id == id) return &t;
             return nullptr;
         };
-        // Priority = position in s.chestTypes (top = best), highlight rows only.
-        auto rank = [&](const std::string& id) -> int {
-            for (size_t i = 0; i < s.chestTypes.size(); ++i)
-                if (s.chestTypes[i].id == id)
-                    return s.chestTypes[i].highlight ? static_cast<int>(i) : 1000;
-            return 1000;
-        };
 
         struct Drawn { ImVec2 p; const TrialMarker* m; const ChestTypeSetting* t; bool ring; };
         std::vector<Drawn> drawn;
         drawn.reserve(ents.chests.size());
 
-        // Tier 0 = untiered pots/urns (no keys, never ringed).
-        int keys[4] = { 0, res.keysBronze, res.keysSilver, res.keysGold };
-        for (int tier = 0; tier <= 3; ++tier) {
-            std::vector<const TrialMarker*> tc;
-            for (const auto& c : ents.chests) {
-                if (c.chestTier != tier) continue;
-                const ChestTypeSetting* t = typeOf(c.label);
-                if (t && !t->show) continue;
-                tc.push_back(&c);
-            }
-            if (tc.empty()) continue;
-            std::sort(tc.begin(), tc.end(), [&](const TrialMarker* a, const TrialMarker* b){
-                return rank(a->label) < rank(b->label); });
-            const int budget = keys[tier];
-            for (size_t i = 0; i < tc.size(); ++i) {
-                ImVec2 sp;
-                if (!projM(*tc[i], sp)) continue;
-                bool ring = (static_cast<int>(i) < budget) && rank(tc[i]->label) < 1000;
-                drawn.push_back({sp, tc[i], typeOf(tc[i]->label), ring});
-            }
+        for (const auto& c : ents.chests) {
+            const ChestTypeSetting* t = typeOf(c.label);
+            if (t && !t->show) continue;
+            ImVec2 sp;
+            if (!projM(c, sp)) continue;
+            drawn.push_back({sp, &c, t, t && t->highlight});
         }
 
         // Pass 1: circles.
@@ -166,14 +145,13 @@ static void DrawOn(ImDrawList* dl, bool large, float playerZ,
 }
 
 void DrawLargeMapMarkers(const TrialEntities& ents, const CrystalRoute& route,
-                         const Settings& s, const SekhemaResources& res,
-                         const PluginSDK::Context* ctx) {
+                         const Settings& s, const PluginSDK::Context* ctx) {
     if (!ctx) return;
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     if (!dl) return;
     const float playerZ = ctx->Entities.GetPlayer().TerrainHeight;
-    if (ctx->Render.GetLargeMapTransform().IsVisible) DrawOn(dl, true,  playerZ, ents, route, s, res, ctx);
-    if (ctx->Render.GetMiniMapTransform().IsVisible)  DrawOn(dl, false, playerZ, ents, route, s, res, ctx);
+    if (ctx->Render.GetLargeMapTransform().IsVisible) DrawOn(dl, true,  playerZ, ents, route, s, ctx);
+    if (ctx->Render.GetMiniMapTransform().IsVisible)  DrawOn(dl, false, playerZ, ents, route, s, ctx);
 }
 
 } // namespace sekhema

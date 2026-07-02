@@ -9,13 +9,12 @@
 
 namespace sekhema {
 
-// Per chest-content-type overlay settings. Vector order = highlight priority
-// (top = best): with N tier keys in hand, the N best visible chests of that
-// tier get the white ring.
+// Per chest-content-type overlay settings. Every chest of a highlight-checked
+// type gets the white ring (drawn on top of circles and labels).
 struct ChestTypeSetting {
     std::string id;                              // ChestTypeInfo::id
     bool        show      = true;                // draw on the map at all
-    bool        highlight = false;               // participates in the key-budget ring
+    bool        highlight = false;               // white ring on all chests of the type
     ImVec4      color{1.0f, 0.85f, 0.3f, 1.0f};  // circle fill
 };
 
