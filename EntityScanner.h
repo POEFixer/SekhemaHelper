@@ -13,8 +13,9 @@ struct TrialMarker {
     MarkerType  type   = MarkerType::Crystal;
     float       gridX  = 0, gridY = 0, worldZ = 0;
     bool        active = true;   // crystal uncollected / portal-lever not yet used
-    int         chestTier = 0;   // 1=Bronze 2=Silver 3=Gold
-    std::string label;           // chest content (else empty)
+    int         chestTier = 0;   // 1=Bronze 2=Silver 3=Gold; 0=untiered (pots/urns)
+    int         quality   = 0;   // 0=none/base, 2=Superior, 3=Prime (path digit)
+    std::string label;           // chest content-type id (ChestTypes.h), else empty
     uint32_t    entityId = 0;
 };
 

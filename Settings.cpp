@@ -50,7 +50,9 @@ void Settings::Save(const std::filesystem::path& directory) const {
     for (const auto& pr : profiles) profilesJson.push_back(ProfileToJson(pr));
 
     json chestJson = json::array();
-    for (const auto& c : chestOrder) chestJson.push_back(json{{"id", c.first}, {"enabled", c.second}});
+    for (const auto& c : chestTypes)
+        chestJson.push_back(json{{"id", c.id}, {"show", c.show},
+                                 {"highlight", c.highlight}, {"color", ColorToJson(c.color)}});
 
     json root = {
         {"drawBestPath", drawBestPath},
@@ -65,10 +67,12 @@ void Settings::Save(const std::filesystem::path& directory) const {
         {"showPortals", showPortals}, {"showLevers", showLevers},
         {"showCrystals", showCrystals}, {"showChests", showChests},
         {"portalColor", ColorToJson(portalColor)}, {"leverColor", ColorToJson(leverColor)},
-        {"crystalColor", ColorToJson(crystalColor)}, {"chestColor", ColorToJson(chestColor)},
+        {"crystalColor", ColorToJson(crystalColor)},
         {"poiRadius", poiRadius},
         {"roomRadius", roomRadius},
-        {"chestOrder", chestJson},
+        {"chestRadius", chestRadius},
+        {"showChestLabels", showChestLabels},
+        {"chestTypes", chestJson},
     };
 
     std::ofstream out(p);          // fs::path overload — Unicode-safe on MSVC
@@ -105,14 +109,48 @@ void Settings::Load(const std::filesystem::path& directory) {
     portalColor  = JsonToColor(root.value("portalColor", json{}), portalColor);
     leverColor   = JsonToColor(root.value("leverColor", json{}), leverColor);
     crystalColor = JsonToColor(root.value("crystalColor", json{}), crystalColor);
-    chestColor   = JsonToColor(root.value("chestColor", json{}), chestColor);
     poiRadius    = root.value("poiRadius", poiRadius);
     roomRadius   = root.value("roomRadius", roomRadius);
+    chestRadius     = root.value("chestRadius", chestRadius);
+    showChestLabels = root.value("showChestLabels", showChestLabels);
 
-    if (auto it = root.find("chestOrder"); it != root.end() && it->is_array() && !it->empty()) {
-        chestOrder.clear();
-        for (const auto& cj : *it)
-            chestOrder.emplace_back(cj.value("id", std::string{}), cj.value("enabled", true));
+    if (auto it = root.find("chestTypes"); it != root.end() && it->is_array() && !it->empty()) {
+        // Saved order wins; unknown ids are dropped, registry types missing from
+        // the file (added in an update) are appended with their defaults.
+        std::vector<ChestTypeSetting> loaded;
+        for (const auto& cj : *it) {
+            std::string id = cj.value("id", std::string{});
+            const ChestTypeInfo* info = FindChestTypeInfo(id);
+            if (!info) continue;
+            ChestTypeSetting c;
+            c.id        = id;
+            c.show      = cj.value("show", info->defaultShow);
+            c.highlight = cj.value("highlight", info->defaultHighlight);
+            c.color     = JsonToColor(cj.value("color", json{}), info->defaultColor);
+            loaded.push_back(std::move(c));
+        }
+        for (const auto& def : DefaultChestTypes()) {
+            bool have = false;
+            for (const auto& c : loaded) if (c.id == def.id) { have = true; break; }
+            if (!have) loaded.push_back(def);
+        }
+        if (!loaded.empty()) chestTypes = std::move(loaded);
+    } else if (auto lg = root.find("chestOrder"); lg != root.end() && lg->is_array()) {
+        // Legacy config (pre per-type settings): reuse its priority order and
+        // enabled flags as the highlight set; colors fall back to defaults.
+        std::vector<ChestTypeSetting> migrated;
+        for (const auto& cj : *lg) {
+            std::string id = cj.value("id", std::string{});
+            const ChestTypeInfo* info = FindChestTypeInfo(id);
+            if (!info) continue;
+            migrated.push_back({id, info->defaultShow, cj.value("enabled", false), info->defaultColor});
+        }
+        for (const auto& def : DefaultChestTypes()) {
+            bool have = false;
+            for (const auto& c : migrated) if (c.id == def.id) { have = true; break; }
+            if (!have) migrated.push_back({def.id, def.show, false, def.color});
+        }
+        if (!migrated.empty()) chestTypes = std::move(migrated);
     }
 }
 

@@ -16,7 +16,10 @@ static bool Has(const std::string& hay, const char* needle) {
 }
 
 // Parse "(Bronze|Silver|Gold)Chest<Content>[123]?" from the last path segment.
-static bool ParseChest(const std::string& path, int& tier, std::string& content) {
+// Also matches the untiered SmallChests/BurialChamber{Pot,SmallChest,Urn}_NN
+// breakables as content "Burial" (tier 0). Quality digit: 1=base, 2=Superior,
+// 3=Prime (kept, drawn as "+" / "++" label suffixes).
+static bool ParseChest(const std::string& path, int& tier, int& quality, std::string& content) {
     size_t slash = path.find_last_of('/');
     std::string seg = (slash == std::string::npos) ? path : path.substr(slash + 1);
     const char* tiers[3] = { "Bronze", "Silver", "Gold" };
@@ -24,11 +27,18 @@ static bool ParseChest(const std::string& path, int& tier, std::string& content)
         std::string pref = std::string(tiers[t]) + "Chest";
         if (seg.size() >= pref.size() && seg.compare(0, pref.size(), pref) == 0) {
             tier = t + 1;
+            quality = 0;
             content = seg.substr(pref.size());
-            if (!content.empty() && content.back() >= '1' && content.back() <= '3')
-                content.pop_back();  // strip trailing quality digit
+            if (!content.empty() && content.back() >= '1' && content.back() <= '3') {
+                quality = content.back() - '0';
+                content.pop_back();
+            }
             return true;
         }
+    }
+    if (seg.rfind("BurialChamber", 0) == 0) {
+        tier = 0; quality = 0; content = "Burial";
+        return true;
     }
     return false;
 }
@@ -66,12 +76,13 @@ TrialEntities ScanTrialEntities(const PluginSDK::Context* ctx,
             m.type = MarkerType::Crystal; m.active = !used();
             if (m.active) out.crystals.push_back(m);
         } else if (Has(path, "/MarakethSanctum/")) {
-            int tier = 0; std::string content;
-            if (ParseChest(path, tier, content)) {
+            int tier = 0, quality = 0; std::string content;
+            if (ParseChest(path, tier, quality, content)) {
                 bool opened = e.Components.Chest
                               && ctx->Components.ReadChest(e.Components.Chest).IsOpened;
                 if (!opened) {
-                    m.type = MarkerType::Chest; m.chestTier = tier; m.label = content;
+                    m.type = MarkerType::Chest; m.chestTier = tier;
+                    m.quality = quality; m.label = content;
                     out.chests.push_back(m);
                 }
             }

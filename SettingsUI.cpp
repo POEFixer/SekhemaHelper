@@ -129,35 +129,80 @@ static void DrawDisplayTab(Settings& s) {
 }
 
 static void DrawOverlaysTab(Settings& s) {
+    // POI row: portals / levers / crystals inline with their colors.
     ImGui::Checkbox("Portals", &s.showPortals); ImGui::SameLine();
     ImGui::ColorEdit4("##pc", &s.portalColor.x, ImGuiColorEditFlags_NoInputs);
+    ImGui::SameLine(0.0f, 18.0f);
     ImGui::Checkbox("Levers", &s.showLevers); ImGui::SameLine();
     ImGui::ColorEdit4("##lc", &s.leverColor.x, ImGuiColorEditFlags_NoInputs);
+    ImGui::SameLine(0.0f, 18.0f);
     ImGui::Checkbox("Crystals (Escape)", &s.showCrystals); ImGui::SameLine();
     ImGui::ColorEdit4("##cc", &s.crystalColor.x, ImGuiColorEditFlags_NoInputs);
-    ImGui::Checkbox("Chests", &s.showChests); ImGui::SameLine();
-    ImGui::ColorEdit4("##hc", &s.chestColor.x, ImGuiColorEditFlags_NoInputs);
-    ImGui::SetNextItemWidth(180);
-    ImGui::SliderFloat("POI radius", &s.poiRadius, 4.0f, 20.0f, "%.0f");
-    ImGui::SetNextItemWidth(180);
-    ImGui::SliderFloat("Current-room radius", &s.roomRadius, 50.0f, 2000.0f, "%.0f");
+
+    ImGui::SetNextItemWidth(150);
+    ImGui::SliderFloat("POI size", &s.poiRadius, 4.0f, 20.0f, "%.0f");
+    ImGui::SameLine(0.0f, 18.0f);
+    ImGui::SetNextItemWidth(150);
+    ImGui::SliderFloat("Room radius", &s.roomRadius, 50.0f, 2000.0f, "%.0f");
     if (ImGui::IsItemHovered())
         ImGui::SetTooltip("Only mark trial objects within this grid distance of the\n"
                           "player (all Sekhema floors share one map).");
+
     ImGui::Separator();
-    ImGui::TextUnformatted("Chest content priority (top = best)");
-    for (size_t i = 0; i < s.chestOrder.size(); ++i) {
-        ImGui::PushID((int)i);
-        ImGui::Checkbox("##en", &s.chestOrder[i].second);
-        ImGui::SameLine(); ImGui::TextUnformatted(s.chestOrder[i].first.c_str());
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60);
-        if (ImGui::ArrowButton("up", ImGuiDir_Up) && i > 0)
-            std::swap(s.chestOrder[i], s.chestOrder[i-1]);
-        ImGui::SameLine();
-        if (ImGui::ArrowButton("down", ImGuiDir_Down) && i + 1 < s.chestOrder.size())
-            std::swap(s.chestOrder[i], s.chestOrder[i+1]);
-        ImGui::PopID();
+
+    // Chests: master toggles + per-type table below.
+    ImGui::Checkbox("Chests", &s.showChests);
+    ImGui::SameLine(0.0f, 18.0f);
+    ImGui::Checkbox("Labels", &s.showChestLabels);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Short type name under each circle, colored by cache tier\n"
+                          "(Bronze / Silver / Gold). \"+\" = Superior, \"++\" = Prime.");
+    ImGui::SameLine(0.0f, 18.0f);
+    ImGui::SetNextItemWidth(140);
+    ImGui::SliderFloat("Circle size", &s.chestRadius, 2.0f, 16.0f, "%.0f");
+
+    ImGui::TextDisabled("Ring = white highlight on the best chests within your key budget; top = best.");
+
+    if (ImGui::SmallButton("Show all")) for (auto& t : s.chestTypes) t.show = true;
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Hide all")) for (auto& t : s.chestTypes) t.show = false;
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Reset")) s.chestTypes = DefaultChestTypes();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Restore default order, colors and flags.");
+
+    ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4.0f, 1.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2.0f, 1.0f));
+    if (ImGui::BeginTable("chest_types", 5,
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit,
+            ImVec2(0.0f, 320.0f))) {
+        ImGui::TableSetupScrollFreeze(0, 1);
+        ImGui::TableSetupColumn("On",    ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Cache", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Ring",  ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Order", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableHeadersRow();
+        for (size_t i = 0; i < s.chestTypes.size(); ++i) {
+            auto& t = s.chestTypes[i];
+            const ChestTypeInfo* info = FindChestTypeInfo(t.id);
+            ImGui::PushID(static_cast<int>(i));
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn(); ImGui::Checkbox("##show", &t.show);
+            ImGui::TableNextColumn(); ImGui::ColorEdit4("##col", &t.color.x,
+                ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(info ? info->uiName : t.id.c_str());
+            ImGui::TableNextColumn(); ImGui::Checkbox("##hl", &t.highlight);
+            ImGui::TableNextColumn();
+            if (ImGui::ArrowButton("up", ImGuiDir_Up) && i > 0)
+                std::swap(s.chestTypes[i], s.chestTypes[i - 1]);
+            ImGui::SameLine(0.0f, 2.0f);
+            if (ImGui::ArrowButton("dn", ImGuiDir_Down) && i + 1 < s.chestTypes.size())
+                std::swap(s.chestTypes[i], s.chestTypes[i + 1]);
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
     }
+    ImGui::PopStyleVar(2);
 }
 
 void DrawSettingsPanel(Settings& s) {

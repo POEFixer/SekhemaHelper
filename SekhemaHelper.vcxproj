@@ -105,6 +105,7 @@
     <ClCompile Include="imgui\imgui_widgets.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ChestTypes.h" />
     <ClInclude Include="DashboardUI.h" />
     <ClInclude Include="Engine.h" />
     <ClInclude Include="EntityScanner.h" />

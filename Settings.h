@@ -1,5 +1,6 @@
 #pragma once
 #include "WeightProfiles.h"
+#include "ChestTypes.h"
 #include <imgui.h>          // ImVec2/ImVec4 POD types only
 #include <filesystem>
 #include <string>
@@ -7,6 +8,26 @@
 #include <vector>
 
 namespace sekhema {
+
+// Per chest-content-type overlay settings. Vector order = highlight priority
+// (top = best): with N tier keys in hand, the N best visible chests of that
+// tier get the white ring.
+struct ChestTypeSetting {
+    std::string id;                              // ChestTypeInfo::id
+    bool        show      = true;                // draw on the map at all
+    bool        highlight = false;               // participates in the key-budget ring
+    ImVec4      color{1.0f, 0.85f, 0.3f, 1.0f};  // circle fill
+};
+
+inline std::vector<ChestTypeSetting> DefaultChestTypes() {
+    std::vector<ChestTypeSetting> v;
+    size_t n = 0;
+    const ChestTypeInfo* reg = ChestTypeRegistry(n);
+    v.reserve(n);
+    for (size_t i = 0; i < n; ++i)
+        v.push_back({reg[i].id, reg[i].defaultShow, reg[i].defaultHighlight, reg[i].defaultColor});
+    return v;
+}
 
 struct Settings {
     // display
@@ -22,20 +43,18 @@ struct Settings {
     std::string activeProfileName = "Default";
     std::vector<WeightProfile> profiles = DefaultProfiles();
 
-    // overlays (fields now; consumed in Phase 4)
+    // overlays
     bool   showPortals = true, showLevers = true, showCrystals = true, showChests = true;
     ImVec4 portalColor = {0.85f,0.45f,1.0f,1.0f}, leverColor = {1.0f,0.8f,0.2f,1.0f};
-    ImVec4 crystalColor= {0.3f,1.0f,0.9f,1.0f},   chestColor  = {1.0f,0.85f,0.3f,1.0f};
-    float  poiRadius = 9.0f;
+    ImVec4 crystalColor= {0.3f,1.0f,0.9f,1.0f};
+    float  poiRadius = 9.0f;        // crystals / portals / levers
     // Only mark trial objects within this grid distance of the player (all Sekhema
     // floors share one big map, so this keeps markers/route to the current room).
     float  roomRadius = 500.0f;
-    // chest content priority: ordered (top=best) + enabled flag
-    std::vector<std::pair<std::string,bool>> chestOrder = {
-        {"GrandSpectrum", true}, {"RadiusJewels", true}, {"LargeRelic", true},
-        {"Jewels", true}, {"Currency", false}, {"MediumRelic", false},
-        {"SmallRelic", false}, {"Maps", false}, {"Generic", false},
-    };
+    // chests: compact circles + tier-colored labels, per-type colors below
+    float  chestRadius     = 6.0f;
+    bool   showChestLabels = true;
+    std::vector<ChestTypeSetting> chestTypes = DefaultChestTypes();
 
     WeightProfile* ActiveProfile();
 

@@ -1,4 +1,5 @@
 #include "LargeMapMarkers.h"
+#include "ChestTypes.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cstdio>
@@ -19,23 +20,39 @@ static void Marker(ImDrawList* dl, ImVec2 p, ImU32 col, float r, const char* lab
     }
 }
 
+// Chest label color follows the cache tier (rarity): Bronze / Silver / Gold;
+// grey for the untiered pots/urns.
+static ImU32 TierLabelColor(int tier) {
+    switch (tier) {
+        case 1:  return IM_COL32(226, 148, 92, 255);
+        case 2:  return IM_COL32(218, 218, 226, 255);
+        case 3:  return IM_COL32(255, 213, 65, 255);
+        default: return IM_COL32(168, 168, 168, 255);
+    }
+}
+
 // Draw all markers projected onto one map (large or mini).
-static void DrawOn(ImDrawList* dl, bool large, const TrialEntities& ents, const CrystalRoute& route,
+static void DrawOn(ImDrawList* dl, bool large, float playerZ,
+                   const TrialEntities& ents, const CrystalRoute& route,
                    const Settings& s, const SekhemaResources& res, const PluginSDK::Context* ctx) {
     const float pr = large ? s.poiRadius : s.poiRadius * 0.6f;
     const bool labels = large;
 
+    // GridToLargeMap/GridToMiniMap expect Z RELATIVE to the player — the host
+    // radar projects with (entityZ - playerZ). Absolute heights made markers on
+    // raised platforms drift away from their true map spot.
     auto projG = [&](int gx, int gy, ImVec2& out) -> bool {
-        float wz = ctx->Terrain.GetTerrainHeight(gx, gy);
+        float dz = ctx->Terrain.GetTerrainHeight(gx, gy) - playerZ;
         float sx = 0, sy = 0;
-        bool ok = large ? ctx->Render.GridToLargeMap((float)gx, (float)gy, wz, sx, sy)
-                        : ctx->Render.GridToMiniMap((float)gx, (float)gy, wz, sx, sy);
+        bool ok = large ? ctx->Render.GridToLargeMap((float)gx, (float)gy, dz, sx, sy)
+                        : ctx->Render.GridToMiniMap((float)gx, (float)gy, dz, sx, sy);
         if (!ok) return false; out = ImVec2(sx, sy); return true;
     };
     auto projM = [&](const TrialMarker& m, ImVec2& out) -> bool {
+        float dz = m.worldZ - playerZ;
         float sx = 0, sy = 0;
-        bool ok = large ? ctx->Render.GridToLargeMap(m.gridX, m.gridY, m.worldZ, sx, sy)
-                        : ctx->Render.GridToMiniMap(m.gridX, m.gridY, m.worldZ, sx, sy);
+        bool ok = large ? ctx->Render.GridToLargeMap(m.gridX, m.gridY, dz, sx, sy)
+                        : ctx->Render.GridToMiniMap(m.gridX, m.gridY, dz, sx, sy);
         if (!ok) return false; out = ImVec2(sx, sy); return true;
     };
 
@@ -64,30 +81,74 @@ static void DrawOn(ImDrawList* dl, bool large, const TrialEntities& ents, const 
         }
     }
 
-    // Chests: per tier, prioritise by content order, highlight top-key-budget.
+    // Chests: per-type colors/visibility, tier-colored labels, and the key-budget
+    // highlight ring drawn LAST so it stays visible over tightly packed circles.
     if (s.showChests && !ents.chests.empty()) {
-        ImU32 col = ImGui::ColorConvertFloat4ToU32(s.chestColor);
-        int keys[4] = { 0, res.keysBronze, res.keysSilver, res.keysGold };
-        auto rank = [&](const std::string& content) -> int {
-            for (size_t i = 0; i < s.chestOrder.size(); ++i)
-                if (s.chestOrder[i].second && !s.chestOrder[i].first.empty()
-                    && content.find(s.chestOrder[i].first) != std::string::npos)
-                    return static_cast<int>(i);
+        const float cr = large ? s.chestRadius : s.chestRadius * 0.6f;
+
+        auto typeOf = [&](const std::string& id) -> const ChestTypeSetting* {
+            for (const auto& t : s.chestTypes) if (t.id == id) return &t;
+            return nullptr;
+        };
+        // Priority = position in s.chestTypes (top = best), highlight rows only.
+        auto rank = [&](const std::string& id) -> int {
+            for (size_t i = 0; i < s.chestTypes.size(); ++i)
+                if (s.chestTypes[i].id == id)
+                    return s.chestTypes[i].highlight ? static_cast<int>(i) : 1000;
             return 1000;
         };
-        for (int tier = 1; tier <= 3; ++tier) {
+
+        struct Drawn { ImVec2 p; const TrialMarker* m; const ChestTypeSetting* t; bool ring; };
+        std::vector<Drawn> drawn;
+        drawn.reserve(ents.chests.size());
+
+        // Tier 0 = untiered pots/urns (no keys, never ringed).
+        int keys[4] = { 0, res.keysBronze, res.keysSilver, res.keysGold };
+        for (int tier = 0; tier <= 3; ++tier) {
             std::vector<const TrialMarker*> tc;
-            for (const auto& c : ents.chests) if (c.chestTier == tier) tc.push_back(&c);
+            for (const auto& c : ents.chests) {
+                if (c.chestTier != tier) continue;
+                const ChestTypeSetting* t = typeOf(c.label);
+                if (t && !t->show) continue;
+                tc.push_back(&c);
+            }
+            if (tc.empty()) continue;
             std::sort(tc.begin(), tc.end(), [&](const TrialMarker* a, const TrialMarker* b){
                 return rank(a->label) < rank(b->label); });
-            int budget = keys[tier];
+            const int budget = keys[tier];
             for (size_t i = 0; i < tc.size(); ++i) {
                 ImVec2 sp;
                 if (!projM(*tc[i], sp)) continue;
-                bool top = (static_cast<int>(i) < budget) && rank(tc[i]->label) < 1000;
-                Marker(dl, sp, col, pr, labels ? tc[i]->label.c_str() : nullptr, top);
+                bool ring = (static_cast<int>(i) < budget) && rank(tc[i]->label) < 1000;
+                drawn.push_back({sp, tc[i], typeOf(tc[i]->label), ring});
             }
         }
+
+        // Pass 1: circles.
+        for (const auto& d : drawn) {
+            ImU32 col = d.t ? ImGui::ColorConvertFloat4ToU32(d.t->color)
+                            : IM_COL32(190, 190, 190, 255);
+            dl->AddCircleFilled(d.p, cr, col);
+            dl->AddCircle(d.p, cr, IM_COL32(0, 0, 0, 180), 0, 1.2f);
+        }
+        // Pass 2: labels (large map only) — short type name, tier-colored,
+        // "+" = Superior, "++" = Prime.
+        if (labels && s.showChestLabels) {
+            for (const auto& d : drawn) {
+                const ChestTypeInfo* info = FindChestTypeInfo(d.m->label);
+                const char* base = info ? info->mapLabel : d.m->label.c_str();
+                char text[48];
+                std::snprintf(text, sizeof(text), "%s%s", base,
+                              d.m->quality == 2 ? "+" : d.m->quality == 3 ? "++" : "");
+                ImVec2 ts = ImGui::CalcTextSize(text);
+                ImVec2 tp(d.p.x - ts.x * 0.5f, d.p.y + cr + 1.0f);
+                dl->AddText(ImVec2(tp.x + 1, tp.y + 1), IM_COL32(0, 0, 0, 210), text);
+                dl->AddText(tp, TierLabelColor(d.m->chestTier), text);
+            }
+        }
+        // Pass 3: highlight rings on top of circles AND labels.
+        for (const auto& d : drawn)
+            if (d.ring) dl->AddCircle(d.p, cr + 2.5f, IM_COL32(255, 255, 255, 235), 0, 2.2f);
     }
 
     if (s.showPortals)
@@ -110,8 +171,9 @@ void DrawLargeMapMarkers(const TrialEntities& ents, const CrystalRoute& route,
     if (!ctx) return;
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     if (!dl) return;
-    if (ctx->Render.GetLargeMapTransform().IsVisible) DrawOn(dl, true,  ents, route, s, res, ctx);
-    if (ctx->Render.GetMiniMapTransform().IsVisible)  DrawOn(dl, false, ents, route, s, res, ctx);
+    const float playerZ = ctx->Entities.GetPlayer().TerrainHeight;
+    if (ctx->Render.GetLargeMapTransform().IsVisible) DrawOn(dl, true,  playerZ, ents, route, s, res, ctx);
+    if (ctx->Render.GetMiniMapTransform().IsVisible)  DrawOn(dl, false, playerZ, ents, route, s, res, ctx);
 }
 
 } // namespace sekhema
