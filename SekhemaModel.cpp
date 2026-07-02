@@ -99,7 +99,7 @@ SekhemaFloor SekhemaReader::Read(uintptr_t panelAddr, const PluginSDK::Context* 
         for (int k = 0; k < Content_FkCount; ++k) {
             uintptr_t rowPtr   = mem.Ptr(e + Content_FkRow0   + k * Content_FkStride);
             uintptr_t tablePtr = mem.Ptr(e + Content_FkTable0 + k * Content_FkStride);
-            if (rowPtr && tablePtr) ClassifyFk(room, rowPtr, tablePtr, mem);
+            if (rowPtr && tablePtr) ClassifyFk(room, rowPtr, tablePtr, mem, &floor.floorTileset);
         }
     }
 

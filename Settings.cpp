@@ -62,6 +62,11 @@ void Settings::Save(const std::filesystem::path& directory) const {
         {"dashboardAutoShow", dashboardAutoShow},
         {"dashboardPos", json::array({dashboardPos.x, dashboardPos.y})},
         {"toggleVk", toggleVk},
+        {"timerOverlayEnabled", timerOverlayEnabled},
+        {"timerOverlayPos", json::array({timerOverlayPos.x, timerOverlayPos.y})},
+        {"timerShowFloorLine", timerShowFloorLine},
+        {"timerShowRoomLine", timerShowRoomLine},
+        {"timerDebugLog", timerDebugLog},
         {"activeProfileName", activeProfileName},
         {"profiles", profilesJson},
         {"showPortals", showPortals}, {"showLevers", showLevers},
@@ -69,7 +74,6 @@ void Settings::Save(const std::filesystem::path& directory) const {
         {"portalColor", ColorToJson(portalColor)}, {"leverColor", ColorToJson(leverColor)},
         {"crystalColor", ColorToJson(crystalColor)},
         {"poiRadius", poiRadius},
-        {"roomRadius", roomRadius},
         {"chestRadius", chestRadius},
         {"showChestLabels", showChestLabels},
         {"chestTypes", chestJson},
@@ -95,6 +99,12 @@ void Settings::Load(const std::filesystem::path& directory) {
     if (auto it = root.find("dashboardPos"); it != root.end() && it->is_array() && it->size()==2)
         dashboardPos = ImVec2((*it)[0].get<float>(), (*it)[1].get<float>());
     toggleVk         = root.value("toggleVk", toggleVk);
+    timerOverlayEnabled = root.value("timerOverlayEnabled", timerOverlayEnabled);
+    if (auto it = root.find("timerOverlayPos"); it != root.end() && it->is_array() && it->size()==2)
+        timerOverlayPos = ImVec2((*it)[0].get<float>(), (*it)[1].get<float>());
+    timerShowFloorLine = root.value("timerShowFloorLine", timerShowFloorLine);
+    timerShowRoomLine  = root.value("timerShowRoomLine", timerShowRoomLine);
+    timerDebugLog      = root.value("timerDebugLog", timerDebugLog);
     activeProfileName= root.value("activeProfileName", activeProfileName);
 
     if (auto it = root.find("profiles"); it != root.end() && it->is_array() && !it->empty()) {
@@ -110,7 +120,6 @@ void Settings::Load(const std::filesystem::path& directory) {
     leverColor   = JsonToColor(root.value("leverColor", json{}), leverColor);
     crystalColor = JsonToColor(root.value("crystalColor", json{}), crystalColor);
     poiRadius    = root.value("poiRadius", poiRadius);
-    roomRadius   = root.value("roomRadius", roomRadius);
     chestRadius     = root.value("chestRadius", chestRadius);
     showChestLabels = root.value("showChestLabels", showChestLabels);
 

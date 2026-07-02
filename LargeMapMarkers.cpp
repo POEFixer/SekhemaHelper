@@ -1,6 +1,7 @@
 #include "LargeMapMarkers.h"
 #include "ChestTypes.h"
 #include <imgui.h>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -16,6 +17,58 @@ static void Marker(ImDrawList* dl, ImVec2 p, ImU32 col, float r, const char* lab
         ImVec2 tp(p.x - ts.x * 0.5f, p.y + r + 1.0f);
         dl->AddText(ImVec2(tp.x + 1, tp.y + 1), IM_COL32(0, 0, 0, 200), label);
         dl->AddText(tp, IM_COL32(255, 255, 255, 235), label);
+    }
+}
+
+// Radar-style animated path: thin translucent base line + direction arrows
+// gliding along it (phase anchored to the path END so arrows don't jitter as
+// the player moves). Ported from the host radar's DrawAnimatedPath.
+static void DrawAnimatedPolyline(ImDrawList* dl, const std::vector<ImVec2>& pts,
+                                 ImU32 color, float scale) {
+    if (pts.size() < 2) return;
+
+    const ImU32 lineColor = (color & 0x00FFFFFF) | 0x50000000;
+    for (size_t i = 0; i + 1 < pts.size(); ++i)
+        dl->AddLine(pts[i], pts[i + 1], lineColor, 1.5f);
+
+    float total = 0.0f;
+    std::vector<float> segLen(pts.size() - 1);
+    for (size_t i = 0; i + 1 < pts.size(); ++i) {
+        const float dx = pts[i + 1].x - pts[i].x, dy = pts[i + 1].y - pts[i].y;
+        segLen[i] = std::sqrt(dx * dx + dy * dy);
+        total += segLen[i];
+    }
+    if (total < 5.0f) return;
+
+    const float arrowSpacing = 45.0f * scale;
+    const float arrowLen = 7.0f * scale;
+    const float arrowHalfW = 3.5f * scale;
+    constexpr float animSpeed = 20.0f;
+    const float animPhase = std::fmod(static_cast<float>(ImGui::GetTime()) * animSpeed,
+                                      arrowSpacing);
+
+    for (float distFromEnd = arrowSpacing - animPhase; distFromEnd < total;
+         distFromEnd += arrowSpacing) {
+        const float dist = total - distFromEnd;
+        float acc = 0.0f;
+        size_t seg = 0;
+        for (; seg < segLen.size(); ++seg) {
+            if (acc + segLen[seg] >= dist) break;
+            acc += segLen[seg];
+        }
+        if (seg >= segLen.size() || segLen[seg] <= 0.001f) continue;
+        const float t = (dist - acc) / segLen[seg];
+        const ImVec2 pos(pts[seg].x + (pts[seg + 1].x - pts[seg].x) * t,
+                         pts[seg].y + (pts[seg + 1].y - pts[seg].y) * t);
+        float dx = (pts[seg + 1].x - pts[seg].x) / segLen[seg];
+        float dy = (pts[seg + 1].y - pts[seg].y) / segLen[seg];
+        const float px = -dy, py = dx;
+        const ImVec2 tip(pos.x + dx * arrowLen, pos.y + dy * arrowLen);
+        const ImVec2 left(pos.x - dx * arrowLen * 0.4f + px * arrowHalfW,
+                          pos.y - dy * arrowLen * 0.4f + py * arrowHalfW);
+        const ImVec2 right(pos.x - dx * arrowLen * 0.4f - px * arrowHalfW,
+                           pos.y - dy * arrowLen * 0.4f - py * arrowHalfW);
+        dl->AddTriangleFilled(tip, left, right, color);
     }
 }
 
@@ -55,27 +108,47 @@ static void DrawOn(ImDrawList* dl, bool large, float playerZ,
         if (!ok) return false; out = ImVec2(sx, sy); return true;
     };
 
-    // Crystals: A* route polyline (decimated) + numbered stops.
+    // Crystals: planned route as a radar-style animated path + numbered stops.
     if (s.showCrystals && !route.stops.empty()) {
         ImU32 col = ImGui::ColorConvertFloat4ToU32(s.crystalColor);
-        // Draw EVERY polyline point — when A* falls back to straight legs the polyline
-        // is just [player, stop0, stop1, ...], so skipping points would drop crystals
-        // from the line (it would connect only every other one).
-        ImVec2 prevp; bool haveprev = false;
+        // Project the polyline into contiguous screen runs (a failed projection
+        // splits the path) and draw each run with the thin line + gliding arrows.
+        std::vector<ImVec2> run;
+        run.reserve(route.polyline.size());
+        const float arrowScale = large ? 1.0f : 0.6f;
         for (size_t i = 0; i < route.polyline.size(); ++i) {
             ImVec2 sp;
             if (projG(route.polyline[i].x, route.polyline[i].y, sp)) {
-                if (haveprev) dl->AddLine(prevp, sp, col, 2.0f);
-                prevp = sp; haveprev = true;
-            } else {
-                haveprev = false;
+                run.push_back(sp);
+            } else if (!run.empty()) {
+                DrawAnimatedPolyline(dl, run, col, arrowScale);
+                run.clear();
             }
         }
+        if (!run.empty()) DrawAnimatedPolyline(dl, run, col, arrowScale);
         for (size_t i = 0; i < route.stops.size(); ++i) {
             ImVec2 sp;
             if (projG(route.stops[i].x, route.stops[i].y, sp)) {
                 char num[8]; std::snprintf(num, sizeof(num), "%zu", i + 1);
                 Marker(dl, sp, col, pr, num, false);
+            }
+        }
+        // Exit-door terminal: a diamond where the route ends (the door that
+        // opens once every crystal is active).
+        if (route.hasDoor) {
+            ImVec2 dp;
+            if (projG(route.doorPoint.x, route.doorPoint.y, dp)) {
+                const float r = pr * 1.1f;
+                const ImVec2 pts[4] = { {dp.x, dp.y - r}, {dp.x + r, dp.y},
+                                        {dp.x, dp.y + r}, {dp.x - r, dp.y} };
+                dl->AddConvexPolyFilled(pts, 4, col);
+                dl->AddPolyline(pts, 4, IM_COL32(0, 0, 0, 180), ImDrawFlags_Closed, 1.5f);
+                if (labels) {
+                    ImVec2 ts = ImGui::CalcTextSize("EXIT");
+                    ImVec2 tp(dp.x - ts.x * 0.5f, dp.y + r + 1.0f);
+                    dl->AddText(ImVec2(tp.x + 1, tp.y + 1), IM_COL32(0, 0, 0, 200), "EXIT");
+                    dl->AddText(tp, IM_COL32(255, 255, 255, 235), "EXIT");
+                }
             }
         }
     }

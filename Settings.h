@@ -38,6 +38,13 @@ struct Settings {
     ImVec2 dashboardPos     = {40.0f, 120.0f};
     int    toggleVk         = 0x75; // VK_F6
 
+    // timers (run / floor / room overlay + tracker diagnostics)
+    bool   timerOverlayEnabled = true;
+    ImVec2 timerOverlayPos     = {40.0f, 40.0f};
+    bool   timerShowFloorLine  = true;
+    bool   timerShowRoomLine   = true;
+    bool   timerDebugLog       = false;
+
     // profiles
     std::string activeProfileName = "Default";
     std::vector<WeightProfile> profiles = DefaultProfiles();
@@ -47,9 +54,6 @@ struct Settings {
     ImVec4 portalColor = {0.85f,0.45f,1.0f,1.0f}, leverColor = {1.0f,0.8f,0.2f,1.0f};
     ImVec4 crystalColor= {0.3f,1.0f,0.9f,1.0f};
     float  poiRadius = 9.0f;        // crystals / portals / levers
-    // Only mark trial objects within this grid distance of the player (all Sekhema
-    // floors share one big map, so this keeps markers/route to the current room).
-    float  roomRadius = 500.0f;
     // chests: compact circles + tier-colored labels, per-type colors below
     float  chestRadius     = 6.0f;
     bool   showChestLabels = true;

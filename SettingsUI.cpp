@@ -126,6 +126,13 @@ static void DrawDisplayTab(Settings& s) {
     ImGui::Checkbox("Show dashboard", &s.dashboardVisible);
     ImGui::Checkbox("Auto-show in Trial", &s.dashboardAutoShow);
     HotkeyPicker(s);
+    ImGui::SeparatorText("Timers");
+    ImGui::Checkbox("Timer overlay (run / floor / room)", &s.timerOverlayEnabled);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Drag the overlay window in-trial to reposition it.");
+    ImGui::Checkbox("Show floor line", &s.timerShowFloorLine);
+    ImGui::Checkbox("Show room line", &s.timerShowRoomLine);
+    ImGui::Checkbox("Debug: log tracker events", &s.timerDebugLog);
 }
 
 static void DrawOverlaysTab(Settings& s) {
@@ -142,11 +149,9 @@ static void DrawOverlaysTab(Settings& s) {
     ImGui::SetNextItemWidth(150);
     ImGui::SliderFloat("POI size", &s.poiRadius, 4.0f, 20.0f, "%.0f");
     ImGui::SameLine(0.0f, 18.0f);
-    ImGui::SetNextItemWidth(150);
-    ImGui::SliderFloat("Room radius", &s.roomRadius, 50.0f, 2000.0f, "%.0f");
-    if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Only mark trial objects within this grid distance of the\n"
-                          "player (all Sekhema floors share one map).");
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+    ImGui::TextUnformatted("Room bounds: automatic (walls + closed doors)");
+    ImGui::PopStyleColor();
 
     ImGui::Separator();
 
@@ -198,11 +203,12 @@ static void DrawOverlaysTab(Settings& s) {
     ImGui::PopStyleVar(2);
 }
 
-void DrawSettingsPanel(Settings& s) {
+void DrawSettingsPanel(Settings& s, RunDatabase* db, HistoryUIState* hist) {
     if (ImGui::BeginTabBar("sekhema_settings")) {
         if (ImGui::BeginTabItem("Display"))  { DrawDisplayTab(s);  ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Profiles")) { DrawProfilesTab(s); ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Overlays")) { DrawOverlaysTab(s); ImGui::EndTabItem(); }
+        if (db && hist && ImGui::BeginTabItem("History")) { DrawHistoryTab(*db, *hist); ImGui::EndTabItem(); }
         ImGui::EndTabBar();
     }
 }

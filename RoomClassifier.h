@@ -42,6 +42,15 @@ inline std::string ExtractRoomType(const std::string& id) {
     return tok; // Ritual / Gauntlet / Boss already match their display name
 }
 
+// "Caverns"=1, "Ruins"=2, "Depths"=3, "Abyss"=4, else 0 (SanctumFloors.dat order).
+inline int FloorNumFromTileset(const std::string& t) {
+    if (t == "Caverns") return 1;
+    if (t == "Ruins")   return 2;
+    if (t == "Depths")  return 3;
+    if (t == "Abyss")   return 4;
+    return 0;
+}
+
 // lowercase, first-match-wins (order matters). "" if nothing matches (-> base weight).
 inline std::string MapReward(const std::string& id) {
     std::string s = LowerCopy(id);
@@ -63,6 +72,9 @@ inline std::string MapReward(const std::string& id) {
 // Reads one content FK pair and writes type/affliction/reward onto the room.
 // table+0x08 -> path string; "SanctumPersistentEffects" -> affliction @ row+0x28;
 // "SanctumRooms" -> id @ row+0x00 -> Treasure?MapReward:ExtractRoomType.
-void ClassifyFk(SekhemaRoom& room, uintptr_t rowPtr, uintptr_t tablePtr, const Mem& mem);
+// outFloorTileset (optional): first SanctumRooms id prefix seen ("Depths_..." ->
+// "Depths") — identifies the floor (FloorNumFromTileset).
+void ClassifyFk(SekhemaRoom& room, uintptr_t rowPtr, uintptr_t tablePtr, const Mem& mem,
+                std::string* outFloorTileset = nullptr);
 
 } // namespace sekhema

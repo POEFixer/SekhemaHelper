@@ -33,6 +33,7 @@ struct SekhemaFloor {
     int  playerLayer = 0;
     int  playerRoom  = 0;
     bool valid       = false;
+    std::string floorTileset;   // "Caverns"/"Ruins"/"Depths"/"Abyss" ("" until classified)
 
     const SekhemaRoom* CurrentRoom() const {
         if (playerLayer < 0 || playerLayer >= (int)layers.size()) return nullptr;

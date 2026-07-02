@@ -43,8 +43,53 @@ static bool ParseChest(const std::string& path, int& tier, int& quality, std::st
     return false;
 }
 
+// Read one shared-state VALUE from a door's StateMachine component. The values
+// vector holds one 8-byte value per define_shared_state entry, in define order
+// ("activate; open;" -> activate=idx0, open=idx1).
+static bool ReadDoorState(const PluginSDK::Context* ctx, uintptr_t sm, int stateIdx) {
+    if (!sm || stateIdx < 0) return false;
+    uintptr_t first = 0, last = 0;
+    ctx->Memory.Read(sm + layout::StateMachine_ValuesFirst, &first, sizeof(first));
+    ctx->Memory.Read(sm + layout::StateMachine_ValuesLast,  &last,  sizeof(last));
+    if (!first || last <= first) return false;
+    int count = static_cast<int>((last - first) / 8);
+    if (stateIdx >= count || count > 64) return false;
+    uint64_t v = 0;
+    ctx->Memory.Read(first + static_cast<uintptr_t>(stateIdx) * 8, &v, sizeof(v));
+    return v != 0;
+}
+
+// Sekhema trial doors (PoE2 reuses the PoE1-league sanctum room templates, so
+// both object families appear). stateIdx = index of "open" in the door's
+// define_shared_state order (see the .ot definitions in the 2026-07-02 spec).
+struct DoorDef { const char* sub; DoorKind kind; int stateIdx; const char* name; };
+static const DoorDef kDoorDefs[] = {
+    { "Sanctum/Objects/SanctumRoomSelectorDoor", DoorKind::Selector,   0, "Selector"   }, // open;wall
+    { "Sanctum/Objects/SanctumLogicDoor",        DoorKind::Completion, 1, "Logic"      }, // activate;open
+    { "Sanctum/Objects/FloorTransitionDoor",     DoorKind::Transition, 1, "Transition" }, // door_opened;open
+    { "KethAscendancy/Objects/KethDoor",         DoorKind::Completion, 0, "Keth"       }, // open
+    // Escape-room exit gate — opens when every crystal is activated
+    // (SanctumAirlocks.dat mechanic; single shared state).
+    { "Objects/SanctumAirlockBlocker",           DoorKind::Completion, 0, "Airlock"    }, // sanctum_completed
+};
+
+// Floor-boss path match (monstervarieties, spec table). Floor 3 must exclude
+// the Shakari minions (same display name "Ashar") and the ShakariDuo map boss.
+static bool IsFloorBossPath(const std::string& path, int floorNum) {
+    switch (floorNum) {
+    case 1: return Has(path, "Monsters/SaltGolem/SaltGolemBoss");
+    case 2: return Has(path, "MarakethSanctumTrial/Boss/SentinelMaceBoss")
+              || Has(path, "MarakethSanctumTrial/Boss/SentinelUnarmedBoss");
+    case 3: return Has(path, "MarakethSanctumTrial/Boss/Shakari/Shakari")
+              && !Has(path, "ShakariMinion") && !Has(path, "ShakariDuo");
+    case 4: return Has(path, "Monsters/ApparitionBoss/SilentSpiresApparition");
+    default: return false;
+    }
+}
+
 TrialEntities ScanTrialEntities(const PluginSDK::Context* ctx,
-                                float playerGridX, float playerGridY, float maxDist) {
+                                float playerGridX, float playerGridY, float maxDist,
+                                int floorNum) {
     TrialEntities out;
     if (!ctx) return out;
     const float maxDistSq = maxDist * maxDist;
@@ -58,7 +103,30 @@ TrialEntities ScanTrialEntities(const PluginSDK::Context* ctx,
         m.gridX = e.GridPositionX; m.gridY = e.GridPositionY; m.worldZ = e.TerrainHeight;
         m.entityId = e.Id;
 
-        // Drop objects on other floors (all floors share one big map).
+        // Doors and bosses are exempt from the radius cap: doors seal the
+        // auto-detected room region (closed ones must be seen even a bit far)
+        // and bosses drive the run tracker. Both are rare entities.
+        for (const auto& dd : kDoorDefs) {
+            if (Has(path, dd.sub)) {
+                TrialDoor td;
+                td.entityId = e.Id; td.kind = dd.kind; td.debugName = dd.name;
+                td.gridX = m.gridX; td.gridY = m.gridY;
+                td.open = ReadDoorState(ctx, e.Components.StateMachine, dd.stateIdx);
+                out.doors.push_back(td);
+                return true;
+            }
+        }
+
+        if (floorNum >= 1 && floorNum <= 4 && IsFloorBossPath(path, floorNum)) {
+            TrialBoss b;
+            b.entityId = e.Id; b.hp = e.CurrentHP; b.maxHp = e.MaxHP;
+            b.alive = e.IsValid && e.CurrentHP > 0;
+            out.bosses.push_back(b);
+            return true;
+        }
+
+        // Coarse sanity radius for the rest (the RoomRegion filter in the glue
+        // does the real per-room cut).
         if (maxDist > 0.0f) {
             float dx = m.gridX - playerGridX, dy = m.gridY - playerGridY;
             if (dx * dx + dy * dy > maxDistSq) return true;

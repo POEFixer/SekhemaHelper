@@ -54,6 +54,10 @@ constexpr int UiLeaf_TextWString = 0x4C0; // std::wstring (MSVC SSO) of a leaf's
 
 // ── Component (SekhemaHelper's OWN raw read; first byte past the 0x10 header) ──
 constexpr int StateMachine_UsedByte = 0x10; // 0 = active/uncollected, !=0 = used/collected/closed
+// StateMachine shared-state VALUES vector (StdVec of 8-byte values, one per
+// define_shared_state entry in define order) — host StateMachineComponentOffsets.
+constexpr int StateMachine_ValuesFirst = 0x160;
+constexpr int StateMachine_ValuesLast  = 0x168;
 
 // ── Player stat dictionary keys (1-based; spec Appendix C) ────────────────────
 constexpr int Stat_Armour              = 235;

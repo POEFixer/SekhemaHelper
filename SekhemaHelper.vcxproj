@@ -97,8 +97,23 @@
     <ClCompile Include="SekhemaModel.cpp" />
     <ClCompile Include="Settings.cpp" />
     <ClCompile Include="SettingsUI.cpp" />
-    <ClCompile Include="WalkablePathfinder.cpp" />
+    <ClCompile Include="HistoryUI.cpp" />
+    <ClCompile Include="RoomRegion.cpp" />
+    <ClCompile Include="RoutePlanner.cpp" />
+    <ClCompile Include="RunDatabase.cpp" />
+    <ClCompile Include="RunTracker.cpp" />
+    <ClCompile Include="TimerOverlay.cpp" />
     <ClCompile Include="WeightCalculator.cpp" />
+    <ClCompile Include="lib\sqlite3.c">
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">CompileAsC</CompileAs>
+      <CompileAs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">CompileAsC</CompileAs>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">SQLITE_THREADSAFE=1;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">SQLITE_THREADSAFE=1;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">TurnOffAllWarnings</WarningLevel>
+      <WarningLevel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">TurnOffAllWarnings</WarningLevel>
+      <SDLCheck Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</SDLCheck>
+      <SDLCheck Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</SDLCheck>
+    </ClCompile>
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imgui_draw.cpp" />
     <ClCompile Include="imgui\imgui_tables.cpp" />
@@ -123,9 +138,15 @@
     <ClInclude Include="SekhemaModel.h" />
     <ClInclude Include="Settings.h" />
     <ClInclude Include="SettingsUI.h" />
+    <ClInclude Include="HistoryUI.h" />
+    <ClInclude Include="RoomRegion.h" />
+    <ClInclude Include="RoutePlanner.h" />
+    <ClInclude Include="RunDatabase.h" />
+    <ClInclude Include="RunTracker.h" />
     <ClInclude Include="Theme.h" />
-    <ClInclude Include="WalkablePathfinder.h" />
+    <ClInclude Include="TimerOverlay.h" />
     <ClInclude Include="WeightCalculator.h" />
+    <ClInclude Include="lib\sqlite3.h" />
     <ClInclude Include="WeightProfiles.h" />
     <ClInclude Include="sdk\PluginAbi.h" />
     <ClInclude Include="sdk\PluginSDK.h" />
