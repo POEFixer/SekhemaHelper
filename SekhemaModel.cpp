@@ -112,7 +112,16 @@ SekhemaFloor SekhemaReader::Read(uintptr_t panelAddr, const PluginSDK::Context* 
             if (!room.roomType.empty() || !room.affliction.empty() || !room.reward.empty())
                 ++classified;
 
-    floor.valid = (classified > 0);
+    // structurePresent: the trial-map graph resolved (>=2 layers: entrance -> ...
+    // -> boss). Kept distinct from `valid` so a floor whose room CONTENTS are
+    // hidden (relic "The Burden of Leadership": "Rooms are unknown on the Trial
+    // Map") is still recognized as a live trial — the plugin renders the
+    // topology/resources/route and fills room identities in as they get revealed,
+    // instead of concluding "no trial here" and permanently standing down for the
+    // whole floor (a floor is one zone). `valid` still gates room-content advice.
+    floor.structurePresent = (layerCount >= 2);
+    floor.classifiedRooms  = classified;
+    floor.valid            = (classified > 0);
     return floor;
 }
 

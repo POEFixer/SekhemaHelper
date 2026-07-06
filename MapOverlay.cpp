@@ -6,7 +6,10 @@ namespace sekhema {
 
 void DrawMapOverlay(const SekhemaFloor& floor, const Settings& s,
                     const PluginSDK::Context* ctx, uintptr_t panel) {
-    if (!ctx || !panel || !floor.valid) return;
+    // structurePresent (not valid): with a rooms-hidden trial the graph exists but
+    // no room is classified yet, so risk dots / best-path frames simply have
+    // nothing to draw until rooms reveal — the walk stays a no-op meanwhile.
+    if (!ctx || !panel || !floor.structurePresent) return;
 
     // Only draw when the floor-map panel is actually open. CE-verified: the panel's
     // own visibility bit clears when closed, while the room widgets keep theirs set

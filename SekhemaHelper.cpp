@@ -61,6 +61,26 @@ static std::string NarrowStr(const std::wstring& w) {
     return s;
 }
 
+// Trial floor number (1..4) from the raw WorldArea id ("Sanctum_1",
+// "Sanctum_2_Foyer_1"...) — the authoritative, relic-proof floor source
+// (available even when "The Burden of Leadership" hides all room content).
+// 0 if not a Sanctum zone / unparseable.
+static int ParseFloorFromAreaId(const std::string& id) {
+    size_t p = id.find("Sanctum_");
+    if (p == std::string::npos) return 0;
+    p += 8;  // past "Sanctum_"
+    int n = 0; bool any = false;
+    while (p < id.size() && id[p] >= '0' && id[p] <= '9') { n = n * 10 + (id[p] - '0'); ++p; any = true; }
+    return (any && n >= 1 && n <= 4) ? n : 0;
+}
+
+// Floor tileset name from its number (inverse of FloorNumFromTileset) — labels
+// the floor when the tileset itself is hidden with the room content.
+static const char* FloorNameFromNum(int n) {
+    switch (n) { case 1: return "Caverns"; case 2: return "Ruins";
+                 case 3: return "Depths";  case 4: return "Abyss"; default: return ""; }
+}
+
 // One worker iteration's published state. The render thread copies it once per
 // new sequence number and draws from its own copy every frame.
 struct TickSnapshot {
@@ -77,6 +97,8 @@ struct TickSnapshot {
     bool      panelVisible = false;
     int       playerHp = -1;
     int       areaLevel = 0;
+    int       floorNumArea = 0;    // Trial floor from the raw zone id (relic-proof)
+    std::string areaId;            // raw WorldArea id (diagnostics)
     int       pgx = 0, pgy = 0;
     std::string charName;
 };
@@ -134,21 +156,32 @@ public:
                 fresh = true;
             }
         }
+        // Pause-aware trial clock: the game leaves InGameState while the pause /
+        // ESC menu is open (and during loads), and the Sekhema timers must hold
+        // then. Accumulate paused wall-time and subtract it, so run/floor/room
+        // durations exclude pauses and the overlay freezes instead of ticking on.
+        const uint64_t rawNow = NowMs();
+        const bool paused = !ctx()->Game.IsInGame();
+        if (m_lastRawNowMs != 0 && paused && rawNow > m_lastRawNowMs)
+            m_pausedAccumMs += rawNow - m_lastRawNowMs;
+        m_lastRawNowMs = rawNow;
+        const uint64_t nowMs = rawNow - m_pausedAccumMs;
+
         if (fresh) {
             m_floor = m_view.floor;
             m_res   = m_view.res;
             m_ents  = m_view.ents;
             m_route = m_view.route;
             m_panel = m_view.panel;
-            TickRunTracker(m_view);
+            TickRunTracker(m_view, nowMs);
         }
 
-        if (m_floor.valid) {
+        if (m_floor.structurePresent) {
             DrawMapOverlay(m_floor, m_settings, ctx(), m_panel);
             DrawLargeMapMarkers(m_ents, m_route, m_settings, ctx());
         }
         DrawDashboard(m_floor, m_res, m_settings);
-        DrawTimerOverlay(m_tracker.GetOverlay(), m_settings, NowMs());
+        DrawTimerOverlay(m_tracker.GetOverlay(), m_settings, nowMs);
     }
 
 private:
@@ -157,6 +190,22 @@ private:
     std::mutex       m_settingsMutex;     // guards profile edits vs the worker's copy
     bool             m_hotkeyDown = false;
 
+    // Detection diagnostics (TEMPORARY; gated by the debug-log toggle). Records
+    // what the fast-path probe resolved so the cause is visible from a log: on
+    // the FIRST entry to a rooms-hidden trial ("The Burden of Leadership"),
+    // {1,84} should resolve struct=1 valid=0 classified=0 with a real layer
+    // shape; as you enter the first room classified/valid tick up. Also reveals
+    // any false-positive structural match in a non-trial area.
+    struct DetectDiag {
+        uintptr_t node = 0;      // node reached via the accepted / last-tried path
+        int  layers = 0;         // resolved layer count at that node
+        bool structPresent = false, valid = false;
+        int  classified = 0;
+        bool accepted = false, viaCached = false;
+    };
+    uint64_t m_lastDetectSig = ~0ull;
+    uint64_t m_lastDetectLogMs = 0;   // heartbeat: also log unchanged state every few s
+
     std::mutex   m_snapMutex;
     TickSnapshot m_snap;                  // latest published (worker -> render)
     uint64_t     m_snapSeq = 0;           // worker-side counter
@@ -164,6 +213,8 @@ private:
     // ── render-thread state ──────────────────────────────────────────────────
     TickSnapshot     m_view;              // last consumed snapshot (render copy)
     uint64_t         m_lastConsumedSeq = 0;
+    uint64_t         m_pausedAccumMs = 0;   // accumulated paused wall-time (render-thread)
+    uint64_t         m_lastRawNowMs = 0;    // previous frame's raw NowMs() (pause delta base)
     SekhemaFloor     m_floor;
     SekhemaResources m_res;
     TrialEntities    m_ents;
@@ -205,6 +256,9 @@ private:
 
     int      m_areaLevelCache = 0;
     uint64_t m_areaLevelForCounter = ~0ull;
+    int      m_areaFloorCache = 0;         // Trial floor parsed from the zone id (cached per area)
+    uint64_t m_areaFloorForCounter = ~0ull;
+    std::string m_areaIdCache;
 
     void StartWorker() {
         if (m_running.exchange(true)) return;
@@ -250,9 +304,26 @@ private:
         }
         snap.areaChangeCounter = m_lastAreaChange;
 
-        snap.panel = FindTrialPanel(snap.floor);
-        snap.trialAbsent = !snap.floor.valid && m_noTrialThisArea;
-        if (!snap.floor.valid) return;
+        bool dbgDetect;
+        { std::lock_guard<std::mutex> lk(m_settingsMutex); dbgDetect = m_settings.timerDebugLog; }
+        DetectDiag diag;
+        snap.panel = FindTrialPanel(snap.floor, dbgDetect ? &diag : nullptr);
+        // trialAbsent = structurally NO panel AND the one-shot BFS already stood
+        // down. A rooms-hidden trial is structurePresent (so NOT absent) — the run
+        // tracker must not treat it as "left the trial".
+        snap.trialAbsent = !snap.floor.structurePresent && m_noTrialThisArea;
+        // Raw zone id -> Trial floor number (cached per area). Authoritative and
+        // relic-proof: works when room content is hidden, so the tracker can
+        // number floors and start the run without any classified room.
+        if (m_areaFloorForCounter != m_lastAreaChange) {
+            m_areaFloorForCounter = m_lastAreaChange;
+            m_areaIdCache = ctx()->Game.GetAreaId();
+            m_areaFloorCache = ParseFloorFromAreaId(m_areaIdCache);
+        }
+        snap.areaId = m_areaIdCache;
+        snap.floorNumArea = m_areaFloorCache;
+        if (dbgDetect) LogDetect(diag, snap);
+        if (!snap.floor.structurePresent) return;
 
         // Settings the worker needs, copied under the lock (profile edits
         // reallocate vectors on the render thread).
@@ -266,7 +337,7 @@ private:
 
         snap.res = ReadResources(ctx(), snap.panel);
         PlayerDefenses def = ReadDefenses(ctx());
-        if (haveProf)
+        if (haveProf && snap.floor.valid)   // best-path/risk advice needs known room content
             Evaluate(snap.floor, prof, def, snap.res);
 
         PluginSDK::Entity pl = ctx()->Entities.GetPlayer();
@@ -281,9 +352,10 @@ private:
         }
         snap.areaLevel = m_areaLevelCache;
 
+        const int floorNum = snap.floorNumArea ? snap.floorNumArea
+                                               : FloorNumFromTileset(snap.floor.floorTileset);
         snap.ents = ScanTrialEntities(ctx(), pl.GridPositionX, pl.GridPositionY,
-                                      kScanRadiusRaw,
-                                      FloorNumFromTileset(snap.floor.floorTileset));
+                                      kScanRadiusRaw, floorNum);
 
         // Auto room bounds (cached): flood-fill from the player with every
         // CLOSED door sealed. Rebuilt on area/door changes or >24-cell drift.
@@ -402,16 +474,26 @@ private:
     }
 
     // ── tracker (render thread, driven by consumed snapshots) ────────────────
-    void TickRunTracker(const TickSnapshot& s) {
+    void TickRunTracker(const TickSnapshot& s, uint64_t nowMs) {
         TrackerInput tin;
-        tin.nowMs = s.nowMs;
+        tin.nowMs = nowMs;   // pause-adjusted trial clock (frozen while paused; see DrawUI)
         tin.inGame = s.inGame;
         tin.areaChangeCounter = s.areaChangeCounter;
-        tin.floorValid = s.floor.valid;
+        // Engage the tracker on a structurally-resolved floor (>=2 layers), NOT
+        // on classified content — so a rooms-hidden trial ("The Burden of
+        // Leadership") still tracks run/floor/room timers (room labels show "?"
+        // until/unless they reveal). The room FLOW is driven by choices/counter +
+        // door/boss entities, which are all structural (no classification needed).
+        tin.floorValid = s.floor.structurePresent;
         tin.trialAbsent = s.inGame && s.trialAbsent;
-        if (s.floor.valid) {
-            tin.floorName  = s.floor.floorTileset;
-            tin.floorNum   = FloorNumFromTileset(s.floor.floorTileset);
+        if (s.floor.structurePresent) {
+            // Floor number: the raw zone id is authoritative and relic-proof;
+            // fall back to the tileset (classified rooms) if the id didn't parse.
+            tin.floorNum   = s.floorNumArea ? s.floorNumArea
+                                            : FloorNumFromTileset(s.floor.floorTileset);
+            tin.floorName  = !s.floor.floorTileset.empty()
+                                 ? s.floor.floorTileset
+                                 : std::string(FloorNameFromNum(tin.floorNum));
             tin.layerCount = static_cast<int>(s.floor.layers.size());
             tin.choicesMade = s.floor.playerLayer + 1;
             for (int l = 0; l < tin.layerCount && l < 8; ++l) {
@@ -594,37 +676,127 @@ private:
         return 0;
     }
 
-    // Resolve the trial panel from the top UI root: cached path -> known [1,84]
-    // -> throttled BFS discovery. Fills outFloor with the valid graph.
-    uintptr_t FindTrialPanel(SekhemaFloor& outFloor) {
-        // Stood down for this area: a full BFS already failed, so there is no trial
-        // panel here. Skip all probing until the next area change re-arms us.
+    void LogDetect(const DetectDiag& d, const TickSnapshot& snap) {
+        // Count classification by KIND: with a rooms-hidden trial the tell is
+        // whether room TYPES (SanctumRooms -> floorTileset -> floorNum, which the
+        // run tracker needs) ever appear, or only afflictions/rewards.
+        int types = 0, affl = 0, rew = 0;
+        for (const auto& L : snap.floor.layers)
+            for (const auto& r : L) {
+                if (!r.roomType.empty())   ++types;
+                if (!r.affliction.empty()) ++affl;
+                if (!r.reward.empty())     ++rew;
+            }
+        const int fnum = FloorNumFromTileset(snap.floor.floorTileset);
+
+        uint64_t sig = 1469598103934665603ull;
+        auto fold = [&](uint64_t v) { sig ^= v; sig *= 1099511628211ull; };
+        fold(d.node); fold(static_cast<uint64_t>(d.layers));
+        fold(d.structPresent ? 1u : 0u); fold(d.valid ? 2u : 0u);
+        fold(static_cast<uint64_t>(d.classified));
+        fold(static_cast<uint64_t>(types)); fold(static_cast<uint64_t>(affl));
+        fold(static_cast<uint64_t>(rew));   fold(static_cast<uint64_t>(fnum));
+        fold(static_cast<uint64_t>(snap.floorNumArea));
+        fold(d.accepted ? 1u : 0u); fold(d.viaCached ? 1u : 0u);
+        fold(m_noTrialThisArea ? 1u : 0u); fold(snap.areaChangeCounter);
+        // Change-only, PLUS a ~3s heartbeat so an unchanged state (e.g. classified
+        // stuck at 0 while the player fights through the first room) still proves
+        // itself over time instead of looking like the log simply stopped.
+        const bool changed   = (sig != m_lastDetectSig);
+        const bool heartbeat = (snap.nowMs - m_lastDetectLogMs) >= 3000;
+        if (!changed && !heartbeat) return;
+        m_lastDetectSig = sig;
+        m_lastDetectLogMs = snap.nowMs;
+
+        // per-layer room-count shape (a real floor looks like 1/3/4/4/5/6/6/1)
+        char shape[128]; int off = 0; shape[0] = 0;
+        const char* sep = "";
+        for (size_t i = 0; i < snap.floor.layers.size() &&
+                           off < static_cast<int>(sizeof(shape)) - 8; ++i) {
+            off += snprintf(shape + off, sizeof(shape) - off, "%s%d", sep,
+                            static_cast<int>(snap.floor.layers[i].size()));
+            sep = "/";
+        }
+
+        char buf[448];
+        snprintf(buf, sizeof(buf),
+            "[SekhemaDetect] area=%llu areaId='%s' floorArea=%d node=0x%llx layers=%d "
+            "struct=%d valid=%d classified=%d tileset='%s' floorNum=%d types=%d affl=%d rew=%d "
+            "accepted=%d cached=%d standDown=%d attempts=%d shape=[%s]",
+            static_cast<unsigned long long>(snap.areaChangeCounter),
+            snap.areaId.c_str(), snap.floorNumArea,
+            static_cast<unsigned long long>(d.node), d.layers,
+            d.structPresent ? 1 : 0, d.valid ? 1 : 0, d.classified,
+            snap.floor.floorTileset.c_str(), fnum, types, affl, rew,
+            d.accepted ? 1 : 0, d.viaCached ? 1 : 0,
+            m_noTrialThisArea ? 1 : 0, m_discoverAttempts, shape);
+        ctx()->Log.Info(buf);
+    }
+
+    // Resolve the trial panel from the top UI root: cached path -> CE-confirmed
+    // {1,84} -> throttled BFS discovery. Accept the fast paths as soon as the
+    // graph resolves STRUCTURALLY (>=2 layers) — NOT requiring any classified
+    // room — so a rooms-hidden trial ("The Burden of Leadership": "Rooms are
+    // unknown on the Trial Map") is detected on FIRST entry instead of standing
+    // the plugin down for the whole floor. Room identities then fill in as they
+    // reveal. The BFS fallback still requires a CLASSIFIED floor: its wide walk
+    // needs the stronger gate to reject coincidental +0x3B8 matches.
+    uintptr_t FindTrialPanel(SekhemaFloor& outFloor, DetectDiag* diag = nullptr) {
+        // Stood down for this area: the one-shot BFS failed AND no structural panel
+        // was found, so there is no trial here. Skip until the next area change.
         if (m_noTrialThisArea) return 0;
 
         uintptr_t root = WalkUpToRoot(ctx()->Ui.GetUiRoot());
         if (!LooksHeap(root)) return 0;
 
-        if (!m_cachedPath.empty()) {
-            uintptr_t panel = ctx()->Ui.FollowPath(root, m_cachedPath.data(),
-                                                   static_cast<int>(m_cachedPath.size()));
+        // Accept a fast path on structural presence alone (>=2 layers).
+        auto tryPath = [&](const int* path, int n, bool cached) -> uintptr_t {
+            uintptr_t panel = ctx()->Ui.FollowPath(root, path, n);
             SekhemaFloor f = SekhemaReader::Read(panel, ctx());
-            if (f.valid) { m_discoverAttempts = 0; outFloor = std::move(f); return panel; }
-        }
+            if (diag) {
+                diag->node = panel; diag->layers = static_cast<int>(f.layers.size());
+                diag->structPresent = f.structurePresent; diag->valid = f.valid;
+                diag->classified = f.classifiedRooms; diag->viaCached = cached;
+            }
+            if (f.structurePresent) {
+                m_discoverAttempts = 0;
+                outFloor = std::move(f);
+                if (diag) diag->accepted = true;
+                return panel;
+            }
+            return 0;
+        };
+
+        if (!m_cachedPath.empty())
+            if (uintptr_t p = tryPath(m_cachedPath.data(), static_cast<int>(m_cachedPath.size()), true))
+                return p;
 
         // CE-confirmed primary path (top root -> child[1] -> child[84] = panel).
         static const int kPrimary[] = {1, 84};
-        uintptr_t panel = ctx()->Ui.FollowPath(root, kPrimary, 2);
-        SekhemaFloor f = SekhemaReader::Read(panel, ctx());
-        if (f.valid) { m_cachedPath.assign(kPrimary, kPrimary + 2); m_discoverAttempts = 0; outFloor = std::move(f); return panel; }
+        if (uintptr_t p = tryPath(kPrimary, 2, false)) {
+            m_cachedPath.assign(kPrimary, kPrimary + 2);
+            return p;
+        }
 
-        // Fast paths failed. The fallback BFS walks the whole game UI tree —
-        // run it at most ONCE per area, after a short settle, then stand down.
+        // Fast paths did not resolve a structural graph. The fallback BFS walks
+        // the whole game UI tree — run it at most ONCE per area, after a short
+        // settle, then stand down.
         if (++m_discoverAttempts == kBfsAttemptAt) {
             std::vector<int> found;
             SekhemaFloor bf;
             uintptr_t bpanel = BfsFindPanel(root, found, bf);
-            if (bpanel) { m_cachedPath = std::move(found); outFloor = std::move(bf); return bpanel; }
-            m_noTrialThisArea = true;   // one BFS, nothing here — stop until area change
+            if (bpanel) {
+                m_cachedPath = std::move(found);
+                if (diag) {
+                    diag->accepted = true; diag->node = bpanel;
+                    diag->layers = static_cast<int>(bf.layers.size());
+                    diag->structPresent = bf.structurePresent; diag->valid = bf.valid;
+                    diag->classified = bf.classifiedRooms;
+                }
+                outFloor = std::move(bf);
+                return bpanel;
+            }
+            m_noTrialThisArea = true;   // one BFS, nothing structural — stop until area change
         }
         return 0;
     }

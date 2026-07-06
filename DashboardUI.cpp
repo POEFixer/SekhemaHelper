@@ -8,25 +8,6 @@
 
 namespace sekhema {
 
-static void RiskChip(const Theme& th, Risk r, const char* label, ImU32 labelCol) {
-    ImU32 c = RiskColor(th, r);
-    ImVec2 p = ImGui::GetCursorScreenPos();
-    float h = ImGui::GetTextLineHeight();
-    ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(p.x + h * 0.4f, p.y + h * 0.55f), h * 0.28f, c);
-    ImGui::Dummy(ImVec2(h * 0.9f, h));
-    ImGui::SameLine();
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(labelCol), "%s", label);
-}
-
-static const char* RiskWord(Risk r) {
-    switch (r) {
-        case Risk::Severe:   return "severe";
-        case Risk::Moderate: return "moderate";
-        case Risk::Minor:    return "minor";
-        default:             return "safe";
-    }
-}
-
 static void DrawResources(const Theme& th, const SekhemaResources& res) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     // Honour bar
@@ -59,18 +40,11 @@ static void DrawChoiceRow(const Theme& th, const SekhemaRoom& room, bool best, f
     ImVec2 p0 = ImGui::GetCursorScreenPos();
     float w = ImGui::GetContentRegionAvail().x;
 
-    // reward (+value) and affliction detail line
+    // reward (+value) detail line
     std::string detail;
     if (!room.reward.empty()) {
         detail = room.reward;
         if (room.rewardValue) { char b[24]; std::snprintf(b, sizeof(b), " +%d", room.rewardValue); detail += b; }
-    }
-    if (!room.affliction.empty()) {
-        if (!detail.empty()) detail += "    ";
-        detail += room.affliction;
-    } else if (best) {
-        if (!detail.empty()) detail += "    ";
-        detail += "no affliction";
     }
 
     // Content on channel 1; the highlight background (channel 0) is drawn behind
@@ -90,10 +64,8 @@ static void DrawChoiceRow(const Theme& th, const SekhemaRoom& room, bool best, f
         dl->AddText(ImVec2(p0.x + w - pad - 4.0f - scW, titlePos.y),
                     best ? th.accent : th.textDim, sc);
         const ImU32 detailCol = best ? th.text : th.textDim;
-        if (!detail.empty()) {
-            if (!room.affliction.empty()) RiskChip(th, room.risk, detail.c_str(), detailCol);
-            else ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(detailCol), "%s", detail.c_str());
-        }
+        if (!detail.empty())
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(detailCol), "%s", detail.c_str());
     }
     ImGui::EndGroup();
     float contentBottom = ImGui::GetItemRectMax().y;
@@ -143,8 +115,14 @@ void DrawDashboard(const SekhemaFloor& floor, const SekhemaResources& res, Setti
         settings.dashboardPos = ImGui::GetWindowPos();   // persist drag
         if (res.valid) DrawResources(th, res);
 
-        if (!floor.valid) {
+        if (!floor.structurePresent) {
             ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "Trial not detected");
+        } else if (!floor.valid) {
+            // Trial floor detected, but its rooms are hidden on the Trial Map
+            // (relic "The Burden of Leadership"). Resources (above) still work;
+            // room identities reveal as you enter them.
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "Rooms hidden on the Trial Map");
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "(rooms reveal as you enter them)");
         } else {
             ImGui::TextUnformatted("NEXT ROOM - take the highlighted");
             auto choices = floor.Choices();
@@ -165,16 +143,6 @@ void DrawDashboard(const SekhemaFloor& floor, const SekhemaResources& res, Setti
                 DrawChoiceRow(th, *c, c->onBestPath, ds);
             }
 
-            ImGui::Separator();
-            ImGui::TextUnformatted("THIS ROOM");
-            const SekhemaRoom* cur = floor.CurrentRoom();
-            if (cur && !cur->affliction.empty()) {
-                char lbl[128];
-                std::snprintf(lbl, sizeof(lbl), "%s   %s", cur->affliction.c_str(), RiskWord(cur->risk));
-                RiskChip(th, cur->risk, lbl, th.text);
-            } else {
-                ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.good), "no active affliction");
-            }
             ImGui::Separator();
             DrawRoute(th, floor);
         }

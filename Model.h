@@ -32,7 +32,11 @@ struct SekhemaFloor {
     std::vector<std::vector<SekhemaRoom>> layers; // layers[layer][room]
     int  playerLayer = 0;
     int  playerRoom  = 0;
-    bool valid       = false;
+    bool valid       = false;       // >=1 room classified (known type/affliction/reward)
+    bool structurePresent = false;  // layer graph resolved (>=2 layers) even with NO known room
+                                     // content — a live trial whose rooms are hidden on the map
+                                     // (relic "The Burden of Leadership") is still recognized here
+    int  classifiedRooms  = 0;      // count of classified rooms (== the old validity count)
     std::string floorTileset;   // "Caverns"/"Ruins"/"Depths"/"Abyss" ("" until classified)
 
     const SekhemaRoom* CurrentRoom() const {
