@@ -1,7 +1,7 @@
 #pragma once
-// RoomClassifier.h — DAT FK -> room type / affliction / reward. The pure helpers
-// (ExtractRoomType / MapReward + string utils) are SDK-free and standalone-tested;
-// ClassifyFk (needs Mem) is implemented in the .cpp with Mem forward-declared.
+// RoomClassifier.h — DAT FK -> room type / affliction / reward. Pure string
+// policy over the FK strings ctx->Sekhema.Content() resolves host-side
+// (table path / row id / row name); SDK-free and standalone-tested.
 #include "Model.h"
 #include <algorithm>
 #include <cctype>
@@ -9,8 +9,6 @@
 #include <vector>
 
 namespace sekhema {
-
-class Mem; // forward decl — keeps this header SDK-free
 
 inline std::string LowerCopy(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(),
@@ -69,12 +67,15 @@ inline std::string MapReward(const std::string& id) {
     return "";
 }
 
-// Reads one content FK pair and writes type/affliction/reward onto the room.
-// table+0x08 -> path string; "SanctumPersistentEffects" -> affliction @ row+0x28;
-// "SanctumRooms" -> id @ row+0x00 -> Treasure?MapReward:ExtractRoomType.
+// Applies one resolved content FK pair to the room. Dispatch on the table
+// path: "SanctumPersistentEffects" -> affliction = rowName; "SanctumRooms" ->
+// rowId -> Treasure?MapReward:ExtractRoomType. The service resolves BOTH id
+// and name unconditionally — only the field meaningful for the table is read
+// here (the other may hold noise where the row layout differs).
 // outFloorTileset (optional): first SanctumRooms id prefix seen ("Depths_..." ->
 // "Depths") — identifies the floor (FloorNumFromTileset).
-void ClassifyFk(SekhemaRoom& room, uintptr_t rowPtr, uintptr_t tablePtr, const Mem& mem,
+void ClassifyFk(SekhemaRoom& room, const std::string& tablePath,
+                const std::string& rowId, const std::string& rowName,
                 std::string* outFloorTileset = nullptr);
 
 } // namespace sekhema

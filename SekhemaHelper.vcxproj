@@ -127,7 +127,6 @@
     <ClInclude Include="HazardRoute.h" />
     <ClInclude Include="LargeMapMarkers.h" />
     <ClInclude Include="MapOverlay.h" />
-    <ClInclude Include="MemReader.h" />
     <ClInclude Include="MemoryLayout.h" />
     <ClInclude Include="MockData.h" />
     <ClInclude Include="Model.h" />

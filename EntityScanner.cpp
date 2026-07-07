@@ -1,5 +1,4 @@
 #include "EntityScanner.h"
-#include "MemoryLayout.h"
 
 #include <string>
 
@@ -43,20 +42,14 @@ static bool ParseChest(const std::string& path, int& tier, int& quality, std::st
     return false;
 }
 
-// Read one shared-state VALUE from a door's StateMachine component. The values
-// vector holds one 8-byte value per define_shared_state entry, in define order
-// ("activate; open;" -> activate=idx0, open=idx1).
+// Read one shared-state VALUE from a door's StateMachine component via the
+// host Sekhema service. The values vector holds one 8-byte value per
+// define_shared_state entry, in define order ("activate; open;" ->
+// activate=idx0, open=idx1). Out-of-range / unreadable -> false (closed).
 static bool ReadDoorState(const PluginSDK::Context* ctx, uintptr_t sm, int stateIdx) {
     if (!sm || stateIdx < 0) return false;
-    uintptr_t first = 0, last = 0;
-    ctx->Memory.Read(sm + layout::StateMachine_ValuesFirst, &first, sizeof(first));
-    ctx->Memory.Read(sm + layout::StateMachine_ValuesLast,  &last,  sizeof(last));
-    if (!first || last <= first) return false;
-    int count = static_cast<int>((last - first) / 8);
-    if (stateIdx >= count || count > 64) return false;
     uint64_t v = 0;
-    ctx->Memory.Read(first + static_cast<uintptr_t>(stateIdx) * 8, &v, sizeof(v));
-    return v != 0;
+    return ctx->Sekhema.GetStateMachineValue(sm, stateIdx, v) && v != 0;
 }
 
 // Sekhema trial doors (PoE2 reuses the PoE1-league sanctum room templates, so
@@ -133,11 +126,10 @@ TrialEntities ScanTrialEntities(const PluginSDK::Context* ctx,
         }
 
         auto used = [&]() -> bool {
+            // -1 (unreadable) counts as NOT used, like the old raw read's
+            // zero-on-fail — a marker is only dropped on a positive "used".
             uintptr_t sm = e.Components.StateMachine;
-            if (!sm) return false;
-            uint8_t b = 0;
-            ctx->Memory.Read(sm + layout::StateMachine_UsedByte, &b, sizeof(b));
-            return b != 0;
+            return sm && ctx->Sekhema.GetRoomUsedFlag(sm) == 1;
         };
 
         if (Has(path, "Hazards/HourglassLethal")) {

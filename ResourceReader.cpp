@@ -1,5 +1,4 @@
 #include "ResourceReader.h"
-#include "MemoryLayout.h"
 
 #include <algorithm>
 #include <initializer_list>
@@ -15,22 +14,29 @@ static uintptr_t Follow(const PluginSDK::Context* ctx, uintptr_t root,
     return ctx->Ui.FollowPath(root, idx.data(), static_cast<int>(idx.size()));
 }
 
-// Parse the integer shown by a leaf UI element. The displayed number is a
-// std::wstring at leaf+0x4C0 and may carry a delta suffix like "152(+0)" or an
-// icon glyph, so parse the LEADING digit run only (skipping thousands
-// separators) and stop at the first terminator — NOT strip-all, which would read
-// "152(+0)" as 1520. The host GetText() reads a different field (+0x4D0) that is
-// wrong for these trial-HUD elements, so read +0x4C0 directly.
+// Parse the integer shown by a leaf UI element. The displayed number is the
+// leaf's StringId StdWString, read host-side and delivered as UTF-8 by the
+// Sekhema service (Ui.GetStringId reads the same canonical field but narrows
+// non-ASCII to '?', which would mangle NBSP thousands separators). The string
+// may carry a delta suffix like "152(+0)" or an icon glyph, so parse the
+// LEADING digit run only (skipping thousands separators, incl. the UTF-8 NBSP
+// pair 0xC2 0xA0) and stop at the first terminator — NOT strip-all, which
+// would read "152(+0)" as 1520.
 static int ParseUiInt(const PluginSDK::Context* ctx, uintptr_t el) {
     if (!ctx || !el) return 0;
-    std::wstring w = ctx->Memory.ReadStdWString(el + layout::UiLeaf_TextWString);
+    std::string s = ctx->Sekhema.GetUiStringId(el);
     long long v = 0; bool started = false;
-    for (wchar_t wc : w) {
-        if (wc >= L'0' && wc <= L'9') {
-            v = v * 10 + (wc - L'0'); started = true;
+    for (size_t i = 0; i < s.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c >= '0' && c <= '9') {
+            v = v * 10 + (c - '0'); started = true;
             if (v > 1'000'000'000LL) break;
-        } else if (wc == L',' || wc == L'.' || wc == L' ' || wc == 0x00A0) {
+        } else if (c == ',' || c == '.' || c == ' ') {
             continue;            // thousands separator within the number
+        } else if (c == 0xC2 && i + 1 < s.size() &&
+                   static_cast<unsigned char>(s[i + 1]) == 0xA0) {
+            ++i;                 // UTF-8 NBSP thousands separator
+            continue;
         } else if (started) {
             break;               // terminator after the number (delta suffix / glyph)
         }

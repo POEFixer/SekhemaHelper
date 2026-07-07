@@ -15,8 +15,6 @@
 #include "SekhemaModel.h"
 #include "ResourceReader.h"
 #include "PlayerStats.h"
-#include "MemReader.h"
-#include "MemoryLayout.h"
 #include "DashboardUI.h"
 #include "MapOverlay.h"
 #include "EntityScanner.h"
@@ -627,29 +625,13 @@ private:
         return node;
     }
 
-    // Cheap: does node+0x3B8 resolve a FloorData with a [1,64] layer vector?
-    int ProbeFloor(const Mem& mem, uintptr_t node) {
-        if (!node) return 0;
-        uintptr_t fo = mem.Ptr(node + layout::MapElement_FloorObjPtr);
-        if (!fo) return 0;
-        uint8_t flag = mem.Read<uint8_t>(fo + layout::FloorObj_Flag);
-        int bases[2] = {
-            flag ? layout::FloorData_OffActive : layout::FloorData_OffAlt,
-            flag ? layout::FloorData_OffAlt : layout::FloorData_OffActive
-        };
-        for (int b : bases) {
-            int lc = VecCount(mem.ReadVec(fo + b + layout::FloorData_Layers), layout::LayerStride);
-            if (lc > 0 && lc <= layout::MaxLayers) return lc;
-        }
-        return 0;
-    }
-
     // BFS from `root` for the first node that resolves a *classified* trial floor
-    // (ProbeFloor pre-filter, then a full SekhemaReader::Read to reject
-    // coincidental matches). Returns the panel address + its index path.
+    // (ctx->Sekhema.ProbeFloor — a cheap host-side "does this node resolve a
+    // FloorData with a [1,64] layer vector?" pre-filter, no parent fallback —
+    // then a full SekhemaReader::Read to reject coincidental matches). Returns
+    // the panel address + its index path.
     uintptr_t BfsFindPanel(uintptr_t root, std::vector<int>& outPath, SekhemaFloor& outFloor) {
         if (!LooksHeap(root)) return 0;
-        Mem mem(ctx());
         struct N { uintptr_t a; std::vector<int> p; int d; };
         std::queue<N> q;
         q.push({root, {}, 0});
@@ -657,7 +639,7 @@ private:
         while (!q.empty() && visited < 60000) {
             if (!m_running.load(std::memory_order_acquire)) return 0;   // fast shutdown
             N n = std::move(q.front()); q.pop(); ++visited;
-            if (ProbeFloor(mem, n.a) > 0) {
+            if (ctx()->Sekhema.ProbeFloor(n.a) > 0) {
                 SekhemaFloor f = SekhemaReader::Read(n.a, ctx());
                 if (f.valid) { outPath = n.p; outFloor = std::move(f); return n.a; }
             }
@@ -740,7 +722,7 @@ private:
     // unknown on the Trial Map") is detected on FIRST entry instead of standing
     // the plugin down for the whole floor. Room identities then fill in as they
     // reveal. The BFS fallback still requires a CLASSIFIED floor: its wide walk
-    // needs the stronger gate to reject coincidental +0x3B8 matches.
+    // needs the stronger gate to reject coincidental floor-pointer matches.
     uintptr_t FindTrialPanel(SekhemaFloor& outFloor, DetectDiag* diag = nullptr) {
         // Stood down for this area: the one-shot BFS failed AND no structural panel
         // was found, so there is no trial here. Skip until the next area change.
