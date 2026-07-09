@@ -47,6 +47,12 @@ double AfflictionWeight(const std::string& name, const WeightProfile& p, const P
     return TableWeight(p.afflictionWeights, name);
 }
 
+bool IsBuildAwareAffliction(const std::string& name) {
+    return name == "Sharpened Arrowhead" || name == "Iron Manacles" ||
+           name == "Shattered Shield"    || name == "Corrosive Concoction" ||
+           name == "Worn Sandals";
+}
+
 double RewardWeight(const std::string& reward, const WeightProfile& p, const SekhemaResources& r) {
     double base = TableWeight(p.rewardWeights, reward);
     if (!r.valid) return base;

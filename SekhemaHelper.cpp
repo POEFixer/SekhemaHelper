@@ -23,6 +23,7 @@
 #include "RunDatabase.h"
 #include "TimerOverlay.h"
 #include "SettingsUI.h"
+#include "AfflictionIcons.h"
 #include <imgui.h>
 #include <Windows.h>
 #include <algorithm>
@@ -122,12 +123,14 @@ public:
         StopWorker();
         m_settings.Save(DirectoryPath());
         m_db.Close();
+        m_icons.ReleaseAll();
         ctx()->Log.Info("SekhemaHelper disabled");
     }
 
     void DrawSettings() override {
         std::lock_guard<std::mutex> lk(m_settingsMutex);   // worker copies the profile
-        DrawSettingsPanel(m_settings, &m_db, &m_hist);
+        m_icons.SetSources(ctx()->D3DDevice, DirectoryPath());
+        DrawSettingsPanel(m_settings, &m_db, &m_hist, &m_icons);
     }
     void SaveSettings() override { m_settings.Save(DirectoryPath()); }
 
@@ -178,7 +181,16 @@ public:
             DrawMapOverlay(m_floor, m_settings, ctx(), m_panel);
             DrawLargeMapMarkers(m_ents, m_route, m_settings, ctx());
         }
-        DrawDashboard(m_floor, m_res, m_settings);
+        // The dashboard window is Sekhema-only: outside a live trial (no floor
+        // structure AND not a Sanctum_N zone) it must not exist at all — not
+        // even as a "Trial not detected" stub. On trial entry the auto-show
+        // option re-opens it once (the F6 toggle still rules mid-trial).
+        const bool inTrial = m_floor.structurePresent || m_view.floorNumArea > 0;
+        if (inTrial && !m_wasInTrial && m_settings.dashboardAutoShow)
+            m_settings.dashboardVisible = true;
+        m_wasInTrial = inTrial;
+        if (inTrial)
+            DrawDashboard(m_floor, m_res, m_settings);
         DrawTimerOverlay(m_tracker.GetOverlay(), m_settings, nowMs);
     }
 
@@ -187,6 +199,7 @@ private:
     Settings         m_settings;
     std::mutex       m_settingsMutex;     // guards profile edits vs the worker's copy
     bool             m_hotkeyDown = false;
+    bool             m_wasInTrial = false;   // dashboard auto-show rising edge
 
     // Detection diagnostics (TEMPORARY; gated by the debug-log toggle). Records
     // what the fast-path probe resolved so the cause is visible from a log: on
@@ -222,6 +235,7 @@ private:
     RunTracker  m_tracker;
     RunDatabase m_db;
     HistoryUIState m_hist;
+    AfflictionIcons m_icons;    // Profiles-tab curse icons (render-thread only)
     int64_t     m_runId = -1, m_floorId = -1, m_roomId = -1;
     std::unordered_map<uint32_t, bool> m_dbgDoorState, m_dbgBossAlive;   // change-only debug dumps
 

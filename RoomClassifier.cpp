@@ -1,4 +1,5 @@
 #include "RoomClassifier.h"
+#include "AfflictionCatalog.h"
 
 namespace sekhema {
 
@@ -8,8 +9,13 @@ void ClassifyFk(SekhemaRoom& room, const std::string& tablePath,
     if (tablePath.empty()) return;
 
     if (HasSubI(tablePath, "SanctumPersistentEffects")) {
-        // room-imposed affliction display name (row Name field)
-        if (!rowName.empty()) room.affliction = rowName;
+        // Room-imposed affliction. Canonicalize to the EN display name by the
+        // dat row Id — a localized client resolves a translated rowName, which
+        // would miss every EN-keyed weight table and the icon/desc catalog.
+        if (const char* en = AfflictionNameForRowId(rowId.c_str()))
+            room.affliction = en;
+        else if (!rowName.empty())
+            room.affliction = rowName;   // boon rows / unknown new rows: as-read
     } else if (HasSubI(tablePath, "SanctumRooms")) {
         if (rowId.empty()) return;
         if (outFloorTileset && outFloorTileset->empty()) {

@@ -61,8 +61,11 @@ struct Settings {
 
     WeightProfile* ActiveProfile();
 
-    void Load(const std::filesystem::path& directory);
+    void Load(const std::filesystem::path& directory);   // LoadFromDisk + profile merge
     void Save(const std::filesystem::path& directory) const;
+
+private:
+    void LoadFromDisk(const std::filesystem::path& directory);
 };
 
 } // namespace sekhema

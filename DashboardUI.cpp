@@ -116,7 +116,9 @@ void DrawDashboard(const SekhemaFloor& floor, const SekhemaResources& res, Setti
         if (res.valid) DrawResources(th, res);
 
         if (!floor.structurePresent) {
-            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "Trial not detected");
+            // Reachable only inside a Sanctum_N zone (the caller gates on that)
+            // while the Trial-Map panel hasn't structurally resolved yet.
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "Resolving Trial Map...");
         } else if (!floor.valid) {
             // Trial floor detected, but its rooms are hidden on the Trial Map
             // (relic "The Burden of Leadership"). Resources (above) still work;

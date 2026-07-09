@@ -82,6 +82,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AfflictionIcons.cpp" />
     <ClCompile Include="DashboardUI.cpp" />
     <ClCompile Include="Engine.cpp" />
     <ClCompile Include="EntityScanner.cpp" />
@@ -120,6 +121,8 @@
     <ClCompile Include="imgui\imgui_widgets.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AfflictionCatalog.h" />
+    <ClInclude Include="AfflictionIcons.h" />
     <ClInclude Include="ChestTypes.h" />
     <ClInclude Include="DashboardUI.h" />
     <ClInclude Include="Engine.h" />

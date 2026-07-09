@@ -84,6 +84,13 @@ void Settings::Save(const std::filesystem::path& directory) const {
 }
 
 void Settings::Load(const std::filesystem::path& directory) {
+    LoadFromDisk(directory);
+    // Reconcile saved profiles with the current defaults + affliction catalog
+    // (new weights / new game-patch afflictions appear, stale names drop).
+    for (auto& p : profiles) MergeProfileDefaults(p);
+}
+
+void Settings::LoadFromDisk(const std::filesystem::path& directory) {
     std::filesystem::path p = directory / "config" / "settings.json";
     if (!std::filesystem::exists(p)) return;
     std::ifstream in(p);

@@ -1,4 +1,6 @@
 #include "SettingsUI.h"
+#include "AfflictionCatalog.h"
+#include "WeightCalculator.h"
 #include <imgui.h>
 #include <Windows.h>
 #include <algorithm>
@@ -83,7 +85,70 @@ static void DrawWeightColumn(const char* title, std::map<std::string,float>& dic
     ImGui::EndChild();
 }
 
-static void DrawProfilesTab(Settings& s) {
+// Rich tooltip for one affliction: game icon + Major/Minor category + the
+// curse description from SanctumPersistentEffects.
+static void AfflictionTooltip(const AfflictionInfo& info, AfflictionIcons* icons) {
+    ImGui::BeginTooltip();
+    ImTextureID tex = icons ? icons->Get(info.iconFile) : ImTextureID{};
+    if (tex) {
+        ImGui::Image(tex, ImVec2(48.0f, 48.0f));
+        ImGui::SameLine();
+    }
+    ImGui::BeginGroup();
+    ImGui::TextUnformatted(info.name);
+    if (info.major)
+        ImGui::TextColored(ImVec4(0.95f, 0.35f, 0.35f, 1.0f), "Major Affliction");
+    else
+        ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.30f, 1.0f), "Minor Affliction");
+    ImGui::EndGroup();
+    ImGui::Separator();
+    ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 320.0f);
+    ImGui::TextUnformatted(info.desc);
+    if (IsBuildAwareAffliction(info.name)) {
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.45f, 0.75f, 1.0f, 1.0f),
+                           "Weight is computed from your defences (build-aware).");
+    }
+    ImGui::PopTextWrapPos();
+    ImGui::EndTooltip();
+}
+
+// The Afflictions column: weight drag + game curse icon + name per row, with
+// the rich tooltip on the icon/name. Falls back to text-only when an icon is
+// missing (resources/afflictions not deployed).
+static void DrawAfflictionColumn(const char* title, std::map<std::string,float>& dict,
+                                 AfflictionIcons* icons, float width, float height) {
+    ImGui::BeginChild(title, ImVec2(width, height), true);
+    ImGui::TextUnformatted(title);
+    ImGui::Separator();
+    ImGui::PushID(title);
+    const float iconSz = ImGui::GetFrameHeight();
+    for (auto& kv : dict) {
+        if (!Contains(kv.first, s_search)) continue;
+        const AfflictionInfo* info = FindAffliction(kv.first.c_str());
+        ImGui::PushID(kv.first.c_str());
+        ImGui::SetNextItemWidth(60);
+        ImGui::DragFloat("##w", &kv.second, 25.0f, -1000000.0f, 1000000.0f, "%.0f");
+        ImGui::SameLine();
+        ImTextureID tex = (icons && info) ? icons->Get(info->iconFile) : ImTextureID{};
+        if (tex) ImGui::Image(tex, ImVec2(iconSz, iconSz));
+        else     ImGui::Dummy(ImVec2(iconSz, iconSz));
+        bool hovered = ImGui::IsItemHovered();
+        ImGui::SameLine(0.0f, 5.0f);
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(kv.first.c_str());
+        hovered = hovered || ImGui::IsItemHovered();
+        if (hovered) {
+            if (info) AfflictionTooltip(*info, icons);
+            else      ImGui::SetTooltip("%s", kv.first.c_str());
+        }
+        ImGui::PopID();
+    }
+    ImGui::PopID();
+    ImGui::EndChild();
+}
+
+static void DrawProfilesTab(Settings& s, AfflictionIcons* icons) {
     if (ImGui::BeginCombo("Profile", s.activeProfileName.c_str())) {
         for (auto& p : s.profiles)
             if (ImGui::Selectable(p.name.c_str(), p.name == s.activeProfileName))
@@ -95,7 +160,7 @@ static void DrawProfilesTab(Settings& s) {
     ImGui::SameLine();
     if (ImGui::Button("Reset profile")) {
         for (auto& def : DefaultProfiles())
-            if (def.name == prof->name) { *prof = def; break; }
+            if (def.name == prof->name) { *prof = def; MergeProfileDefaults(*prof); break; }
     }
     ImGui::SetNextItemWidth(200);
     ImGui::InputTextWithHint("##search", "Search afflictions...", s_search, sizeof(s_search));
@@ -103,7 +168,7 @@ static void DrawProfilesTab(Settings& s) {
     float spacing = ImGui::GetStyle().ItemSpacing.x;
     float colW = (ImGui::GetContentRegionAvail().x - spacing * 2.0f) / 3.0f;
     const float colH = 320.0f;
-    DrawWeightColumn("Afflictions", prof->afflictionWeights, true, colW, colH);
+    DrawAfflictionColumn("Afflictions", prof->afflictionWeights, icons, colW, colH);
     ImGui::SameLine();
     DrawWeightColumn("Room types", prof->roomTypeWeights, false, colW, colH);
     ImGui::SameLine();
@@ -203,10 +268,11 @@ static void DrawOverlaysTab(Settings& s) {
     ImGui::PopStyleVar(2);
 }
 
-void DrawSettingsPanel(Settings& s, RunDatabase* db, HistoryUIState* hist) {
+void DrawSettingsPanel(Settings& s, RunDatabase* db, HistoryUIState* hist,
+                       AfflictionIcons* icons) {
     if (ImGui::BeginTabBar("sekhema_settings")) {
         if (ImGui::BeginTabItem("Display"))  { DrawDisplayTab(s);  ImGui::EndTabItem(); }
-        if (ImGui::BeginTabItem("Profiles")) { DrawProfilesTab(s); ImGui::EndTabItem(); }
+        if (ImGui::BeginTabItem("Profiles")) { DrawProfilesTab(s, icons); ImGui::EndTabItem(); }
         if (ImGui::BeginTabItem("Overlays")) { DrawOverlaysTab(s); ImGui::EndTabItem(); }
         if (db && hist && ImGui::BeginTabItem("History")) { DrawHistoryTab(*db, *hist); ImGui::EndTabItem(); }
         ImGui::EndTabBar();
