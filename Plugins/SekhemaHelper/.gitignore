@@ -1,0 +1,16 @@
+# Build intermediates / outputs
+Release/
+Debug/
+x64/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# Standalone test binaries
+tests/*.exe
+tests/*.obj
+
+# Runtime config written by the plugin
+config/

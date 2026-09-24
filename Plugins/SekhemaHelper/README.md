@@ -42,20 +42,3 @@ In the host Plugins settings tab:
   Sekhema chest (Spectrum, Time-Lost, Relics, Jewels, Currency, Maps, armour
   and weapon caches, pots/urns, ...): show, circle colour, and Ring — every
   chest of a Ring-checked type gets a white ring drawn on top.
-
-## Build from source
-
-This repository is the plugin folder from the POEFixer source tree (`Plugins/SekhemaHelper/`) together with the host files it compiles against, kept at the same relative paths:
-
-- `POEFixer/plugin_sdk/` - the POEFixer Plugin SDK v6 headers (`PluginAbi.h`, `PluginSDK.h`)
-- `POEFixer/imgui/` - the Dear ImGui sources the DLL compiles against
-
-1. Install Visual Studio 2022 with the "Desktop development with C++" workload (MSVC v143, Windows 10/11 SDK).
-2. Open `SekhemaHelper.sln`, select **Release | x64** and build the solution.
-3. The plugin is written to `x64\Release\Plugins\SekhemaHelper\SekhemaHelper.dll`.
-
-## Install
-
-Copy `SekhemaHelper.dll` into `Plugins\SekhemaHelper\` next to the POEFixer executable (create the folder if needed), start POEFixer and enable the plugin in the Plugins tab.
-
-Also copy the `Plugins\SekhemaHelper\resources\` folder into the same folder as the DLL: it holds the affliction and curse icons.

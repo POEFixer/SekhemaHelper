@@ -1,9 +1,9 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SekhemaHelper", "SekhemaHelper.vcxproj", "{7C3F9A12-5D8E-4B6A-9F21-3E4D5C6B7A80}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SekhemaHelper", "Plugins\SekhemaHelper\SekhemaHelper.vcxproj", "{7C3F9A12-5D8E-4B6A-9F21-3E4D5C6B7A80}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,8 +18,5 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
-	EndGlobalSection
-	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {3D7A9C2E-6B14-4F08-9E5A-1C2D3E4F5A6B}
 	EndGlobalSection
 EndGlobal
