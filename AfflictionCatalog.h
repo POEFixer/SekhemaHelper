@@ -61,7 +61,7 @@ inline constexpr AfflictionInfo kAfflictions[] = {
     { "Veiled Sight", "curseveiledsighticon.png", "Rooms are unknown on the Trial Map", true },
     { "Weakened Flesh", "afflictionweakenedfleshicon.png", "25% less Maximum Honour", false },
     { "Winter Drought", "afflictionwinterdroughticon.png", "Lose all Sacred Water on floor completion", false },
-    { "Worn Sandals", "cursewornsandalsicon.png", "30% less Movement Speed if you've been Hit by an Enemy Recently", false },
+    { "Worn Sandals", "cursewornsandalsicon.png", "30% reduced Movement Speed if you've been Hit by an Enemy Recently", false },
 };
 
 // Every SanctumPersistentEffects curse row: dat Id -> EN display name.

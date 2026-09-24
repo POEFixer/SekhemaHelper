@@ -188,7 +188,8 @@ public:
         const bool inTrial = m_floor.structurePresent || m_view.floorNumArea > 0;
         if (inTrial && !m_wasInTrial && m_settings.dashboardAutoShow)
             m_settings.dashboardVisible = true;
-        m_wasInTrial = inTrial;
+        if (inTrial || (m_view.inGame && m_view.trialAbsent))
+            m_wasInTrial = inTrial;
         if (inTrial)
             DrawDashboard(m_floor, m_res, m_settings);
         DrawTimerOverlay(m_tracker.GetOverlay(), m_settings, nowMs);
