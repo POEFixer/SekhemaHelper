@@ -15,7 +15,7 @@ constexpr int Stat_Armour              = 235;
 constexpr int Stat_MaximumLife         = 239;
 constexpr int Stat_MaximumEnergyShield = 241;
 constexpr int Stat_EvasionRating       = 276;
-constexpr int Stat_QueenOfTheForest    = 9490;
+constexpr int Stat_QueenOfTheForest    = 9491;   // movement_speed_is_only_base_+1%_per_x_evasion_rating, Stats row 9490 + 1
 
 } // namespace layout
 } // namespace sekhema
