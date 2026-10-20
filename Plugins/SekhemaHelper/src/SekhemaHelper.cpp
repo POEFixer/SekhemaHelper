@@ -628,7 +628,7 @@ private:
 
     // ── trial-panel discovery (worker thread only) ───────────────────────────
 
-    // Walk up from a node to the top heap UI root via Parent (+0xB8). The
+    // Walk up from a node to the top heap UI root via each element's parent. The
     // SDK-exposed roots are the HUD (get_game_ui_root) and the inventory panel
     // (get_ui_root); the trial panel lives under the top root above both.
     uintptr_t WalkUpToRoot(uintptr_t node) {
