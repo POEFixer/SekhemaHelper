@@ -1,5 +1,9 @@
 # SekhemaHelper — POE2Fixer Plugin
 
+Current version: 1.0.0
+
+Requires POE2Fixer 364 or newer.
+
 A Trial of the Sekhemas helper for Path of Exile 2, built on the POE2Fixer
 v6 Plugin SDK. It scores every revealed room, recommends the optimal route
 to the boss, shows your live resources, and overlays the best path + hazard
@@ -43,19 +47,18 @@ In the host Plugins settings tab:
   and weapon caches, pots/urns, ...): show, circle colour, and Ring — every
   chest of a Ring-checked type gets a white ring drawn on top.
 
+## Install
+
+Install it from POE2Fixer → Plugins → Plugin Manager (one click, updates included), or download `SekhemaHelper.zip` from [Releases](https://github.com/POEFixer/SekhemaHelper/releases/latest) and extract it into the POE2Fixer folder (it creates `Plugins\SekhemaHelper\`). Then enable the plugin in the Plugins tab.
+
 ## Build from source
 
-This repository is the plugin folder from the POEFixer source tree (`Plugins/SekhemaHelper/`) together with the host files it compiles against, kept at the same relative paths:
+This repository is the plugin folder from the POE2Fixer source tree (`Plugins/SekhemaHelper/`) together with the host files it compiles against, kept at the same relative paths:
 
-- `POEFixer/plugin_sdk/` - the POEFixer Plugin SDK v6 headers (`PluginAbi.h`, `PluginSDK.h`)
+- `POEFixer/plugin_sdk/` - the POE2Fixer Plugin SDK v6 headers (`PluginAbi.h`, `PluginSDK.h`)
 - `POEFixer/imgui/` - the Dear ImGui sources the DLL compiles against
 
 1. Install Visual Studio 2022 with the "Desktop development with C++" workload (MSVC v143, Windows 10/11 SDK).
 2. Open `SekhemaHelper.sln`, select **Release | x64** and build the solution.
-3. The plugin is written to `x64\Release\Plugins\SekhemaHelper\SekhemaHelper.dll`.
-
-## Install
-
-Copy `SekhemaHelper.dll` into `Plugins\SekhemaHelper\` next to the POEFixer executable (create the folder if needed), start POEFixer and enable the plugin in the Plugins tab.
-
-Also copy the `Plugins\SekhemaHelper\resources\` folder into the same folder as the DLL: it holds the affliction and curse icons.
+3. The plugin is written to `x64\Release\Plugins\SekhemaHelper\SekhemaHelper.dll` (Release builds carry no debug information, see `Directory.Build.targets`).
+4. Copy `SekhemaHelper.dll` into `Plugins\SekhemaHelper\` next to the POE2Fixer executable, together with `Plugins\SekhemaHelper\resources` from this repository (same folder names).

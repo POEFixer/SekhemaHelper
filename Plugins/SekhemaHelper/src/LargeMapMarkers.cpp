@@ -10,8 +10,8 @@ namespace sekhema {
 
 static void Marker(ImDrawList* dl, ImVec2 p, ImU32 col, float r, const char* label, bool ring) {
     dl->AddCircleFilled(p, r, col);
-    dl->AddCircle(p, r, IM_COL32(0, 0, 0, 180), 0, 1.5f);
-    if (ring) dl->AddCircle(p, r + 3.0f, IM_COL32(255, 255, 255, 230), 0, 2.0f);
+    dl->AddCircle(p, r, IM_COL32(0, 0, 0, 180), 0, 1.5f, ImDrawFlags_StrokeCenter);
+    if (ring) dl->AddCircle(p, r + 3.0f, IM_COL32(255, 255, 255, 230), 0, 2.0f, ImDrawFlags_StrokeCenter);
     if (label && label[0]) {
         ImVec2 ts = ImGui::CalcTextSize(label);
         ImVec2 tp(p.x - ts.x * 0.5f, p.y + r + 1.0f);
@@ -142,7 +142,7 @@ static void DrawOn(ImDrawList* dl, bool large, float playerZ,
                 const ImVec2 pts[4] = { {dp.x, dp.y - r}, {dp.x + r, dp.y},
                                         {dp.x, dp.y + r}, {dp.x - r, dp.y} };
                 dl->AddConvexPolyFilled(pts, 4, col);
-                dl->AddPolyline(pts, 4, IM_COL32(0, 0, 0, 180), ImDrawFlags_Closed, 1.5f);
+                dl->AddPolyline(pts, 4, IM_COL32(0, 0, 0, 180), 1.5f, ImDrawFlags_Closed);
                 if (labels) {
                     ImVec2 ts = ImGui::CalcTextSize("EXIT");
                     ImVec2 tp(dp.x - ts.x * 0.5f, dp.y + r + 1.0f);
@@ -181,7 +181,7 @@ static void DrawOn(ImDrawList* dl, bool large, float playerZ,
             ImU32 col = d.t ? ImGui::ColorConvertFloat4ToU32(d.t->color)
                             : IM_COL32(190, 190, 190, 255);
             dl->AddCircleFilled(d.p, cr, col);
-            dl->AddCircle(d.p, cr, IM_COL32(0, 0, 0, 180), 0, 1.2f);
+            dl->AddCircle(d.p, cr, IM_COL32(0, 0, 0, 180), 0, 1.2f, ImDrawFlags_StrokeCenter);
         }
         // Pass 2: labels (large map only) — short type name, tier-colored,
         // "+" = Superior, "++" = Prime.
@@ -200,7 +200,7 @@ static void DrawOn(ImDrawList* dl, bool large, float playerZ,
         }
         // Pass 3: highlight rings on top of circles AND labels.
         for (const auto& d : drawn)
-            if (d.ring) dl->AddCircle(d.p, cr + 2.5f, IM_COL32(255, 255, 255, 235), 0, 2.2f);
+            if (d.ring) dl->AddCircle(d.p, cr + 2.5f, IM_COL32(255, 255, 255, 235), 0, 2.2f, ImDrawFlags_StrokeCenter);
     }
 
     if (s.showPortals)

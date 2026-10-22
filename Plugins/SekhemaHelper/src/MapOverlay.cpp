@@ -44,13 +44,13 @@ void DrawMapOverlay(const SekhemaFloor& floor, const Settings& s,
             if (!room.affliction.empty()) {
                 ImVec2 c(x + 9.0f, y + 9.0f);
                 dl->AddCircleFilled(c, 5.5f, RiskColor(th, room.risk));
-                dl->AddCircle(c, 5.5f, IM_COL32(0, 0, 0, 170), 0, 1.5f);
+                dl->AddCircle(c, 5.5f, IM_COL32(0, 0, 0, 170), 0, 1.5f, ImDrawFlags_StrokeCenter);
             }
 
             // Best-path frame (skip the player's current room — that's where you are).
             bool isCurrent = (li == floor.playerLayer && ri == floor.playerRoom);
             if (s.drawBestPath && room.onBestPath && !isCurrent) {
-                dl->AddRect(ImVec2(x, y), ImVec2(x + w, y + h), pathCol, 8.0f, 0, s.frameThickness);
+                dl->AddRect(ImVec2(x, y), ImVec2(x + w, y + h), pathCol, 8.0f, s.frameThickness, ImDrawFlags_StrokeCenter);
             }
         }
     }

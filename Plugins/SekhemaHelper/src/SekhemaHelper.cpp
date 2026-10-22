@@ -803,3 +803,11 @@ private:
 
 extern "C" PLUGIN_API PluginSDK::Plugin* CreatePlugin()              { return new sekhema::SekhemaHelperPlugin(); }
 extern "C" PLUGIN_API void               DestroyPlugin(PluginSDK::Plugin* p) { delete p; }
+
+// Plugin info: the host checks it before CreatePlugin; the publish tool reads it.
+POEFIXER_PLUGIN_INFO(
+    "SekhemaHelper",
+    "Sekhema Helper",
+    "1.0.0",
+    "POEFixer",
+    "Trial of the Sekhemas helper: scores every room, recommends the best route to the boss and marks it on the in-game map.")

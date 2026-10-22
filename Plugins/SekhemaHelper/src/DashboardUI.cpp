@@ -74,7 +74,7 @@ static void DrawChoiceRow(const Theme& th, const SekhemaRoom& room, bool best, f
     if (best) {
         ImVec2 r1(p0.x + w, contentBottom + pad);
         dl->AddRectFilled(p0, r1, th.accentDim, 6.0f);
-        dl->AddRect(p0, r1, th.accent, 6.0f, 0, 2.0f);
+        dl->AddRect(p0, r1, th.accent, 6.0f, 2.0f, ImDrawFlags_StrokeCenter);
     }
     dl->ChannelsMerge();
 

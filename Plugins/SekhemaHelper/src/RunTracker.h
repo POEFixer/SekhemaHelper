@@ -1,6 +1,6 @@
 #pragma once
 // RunTracker.h — pure run/floor/room timing state machine for the Sekhema trial.
-// SDK-free (standalone-tested in tests/test_tracker.cpp). Consumes one
+// SDK-free. Consumes one
 // TrackerInput per plugin read-tick and emits TrackerEvents; the plugin glue
 // maps events to RunDatabase rows and the overlay reads GetOverlay().
 //

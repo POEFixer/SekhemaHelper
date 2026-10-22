@@ -1,7 +1,7 @@
 #pragma once
 // RunDatabase.h — SQLite persistence for Sekhema runs/floors/rooms (KillCount
-// pattern: sqlite3 amalgamation compiled into the DLL). SDK-free; standalone-
-// tested in tests/test_db.cpp. All methods no-op when the DB failed to open.
+// pattern: sqlite3 amalgamation compiled into the DLL). SDK-free. All methods
+// no-op when the DB failed to open.
 #include "RunTracker.h"   // TrackerRoomInfo
 #include <cstdint>
 #include <filesystem>
