@@ -808,6 +808,6 @@ extern "C" PLUGIN_API void               DestroyPlugin(PluginSDK::Plugin* p) { d
 POEFIXER_PLUGIN_INFO(
     "SekhemaHelper",
     "Sekhema Helper",
-    "1.0.0",
+    "1.0.1",
     "POEFixer",
     "Trial of the Sekhemas helper: scores every room, recommends the best route to the boss and marks it on the in-game map.")

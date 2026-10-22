@@ -1,6 +1,6 @@
 # SekhemaHelper — POE2Fixer Plugin
 
-Current version: 1.0.0
+Current version: 1.0.1
 
 Requires POE2Fixer 364 or newer.
 
