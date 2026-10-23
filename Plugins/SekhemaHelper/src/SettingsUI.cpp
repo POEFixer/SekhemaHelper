@@ -194,7 +194,9 @@ static void DrawDisplayTab(Settings& s) {
     ImGui::SeparatorText("Timers");
     ImGui::Checkbox("Timer overlay (run / floor / room)", &s.timerOverlayEnabled);
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("Drag the overlay window in-trial to reposition it.");
+        ImGui::SetTooltip("Drag the timer window in a trial to move it.\n"
+                          "Hover it for its gear menu (top-right corner): lock it, take it out\n"
+                          "of the game onto any screen, reset its position or close it.");
     ImGui::Checkbox("Show floor line", &s.timerShowFloorLine);
     ImGui::Checkbox("Show room line", &s.timerShowRoomLine);
     ImGui::Checkbox("Debug: log tracker events", &s.timerDebugLog);

@@ -128,6 +128,9 @@ public:
     }
 
     void DrawSettings() override {
+        // A separate menu window draws the settings in its own ImGui context.
+        if (ctx()->ImGuiContext)
+            ImGui::SetCurrentContext(static_cast<ImGuiContext*>(ctx()->ImGuiContext));
         std::lock_guard<std::mutex> lk(m_settingsMutex);   // worker copies the profile
         m_icons.SetSources(ctx()->D3DDevice, DirectoryPath());
         DrawSettingsPanel(m_settings, &m_db, &m_hist, &m_icons);
@@ -190,9 +193,14 @@ public:
             m_settings.dashboardVisible = true;
         if (inTrial || (m_view.inGame && m_view.trialAbsent))
             m_wasInTrial = inTrial;
+        const bool hadDashboard = m_settings.dashboardVisible;
+        const bool hadTimers = m_settings.timerOverlayEnabled;
         if (inTrial)
-            DrawDashboard(m_floor, m_res, m_settings);
-        DrawTimerOverlay(m_tracker.GetOverlay(), m_settings, nowMs);
+            DrawDashboard(ctx()->Overlay, m_floor, m_res, m_settings);
+        DrawTimerOverlay(ctx()->Overlay, m_tracker.GetOverlay(), m_settings, nowMs);
+        // A window's title-bar X or gear menu (Close) turned its switch off: save it.
+        if ((hadDashboard && !m_settings.dashboardVisible) || (hadTimers && !m_settings.timerOverlayEnabled))
+            SaveSettings();
     }
 
 private:
@@ -808,6 +816,6 @@ extern "C" PLUGIN_API void               DestroyPlugin(PluginSDK::Plugin* p) { d
 POEFIXER_PLUGIN_INFO(
     "SekhemaHelper",
     "Sekhema Helper",
-    "1.0.1",
+    "1.0.2",
     "POEFixer",
     "Trial of the Sekhemas helper: scores every room, recommends the best route to the boss and marks it on the in-game map.")

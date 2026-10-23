@@ -35,12 +35,15 @@ struct Settings {
     ImVec4 bestPathColor    = {0.20f, 0.85f, 1.00f, 1.00f};
     bool   dashboardVisible = true;
     bool   dashboardAutoShow= true;
+    // Window positions from before POEFixer 366 (dashboardPos, timerOverlayPos). Only
+    // read now: they seed the host's window store once (InfoWindowOptions::legacyPos)
+    // and place the windows on an older host. Still loaded and saved unchanged.
     ImVec2 dashboardPos     = {40.0f, 120.0f};
     int    toggleVk         = 0x75; // VK_F6
 
     // timers (run / floor / room overlay + tracker diagnostics)
     bool   timerOverlayEnabled = true;
-    ImVec2 timerOverlayPos     = {40.0f, 40.0f};
+    ImVec2 timerOverlayPos     = {40.0f, 40.0f};   // only read now (see dashboardPos)
     bool   timerShowFloorLine  = true;
     bool   timerShowRoomLine   = true;
     bool   timerDebugLog       = false;

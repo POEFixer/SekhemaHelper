@@ -1,5 +1,6 @@
 #include "TimerOverlay.h"
 #include "Theme.h"
+#include "../../../POEFixer/plugin_sdk/PluginInfoWindow.h"
 #include <imgui.h>
 #include <cstdio>
 
@@ -28,7 +29,61 @@ static void Line(ImU32 labelCol, const char* label, ImU32 valueCol, const char* 
     ImGui::PopStyleColor();
 }
 
-void DrawTimerOverlay(const RunTracker::Overlay& ov, Settings& s, uint64_t nowMs) {
+// The timer lines, inside the open window.
+static void DrawTimerLines(const Theme& th, const RunTracker::Overlay& ov, const Settings& s,
+                           uint64_t nowMs) {
+    char dur[40], label[96];
+
+    // Line 1: run (frozen at the final boss kill once completed)
+    if (ov.runComplete) {
+        FmtDur(ov.runEndMs - ov.runStartMs, dur, sizeof(dur));
+        Line(th.good, "RUN COMPLETE", th.good, dur);
+    } else {
+        FmtDur(nowMs > ov.runStartMs ? nowMs - ov.runStartMs : 0, dur, sizeof(dur));
+        Line(th.accent, "SEKHEMA", th.text, dur);
+    }
+
+    // Line 2: floor (locks in green for a few seconds after the boss kill)
+    if (s.timerShowFloorLine && ov.floorNum > 0) {
+        const bool locked = ov.lockedFloorNum > 0 && ov.floorBossKillMs > 0 &&
+                            nowMs >= ov.floorBossKillMs &&
+                            nowMs - ov.floorBossKillMs < kFloorLockShowMs;
+        if (locked) {
+            FmtDur(ov.lockedFloorDurationMs, dur, sizeof(dur));
+            snprintf(label, sizeof(label), "Floor %d \xE2\x9C\x93", ov.lockedFloorNum);
+            Line(th.good, label, th.good, dur);
+        } else {
+            FmtDur(nowMs > ov.floorStartMs ? nowMs - ov.floorStartMs : 0, dur, sizeof(dur));
+            snprintf(label, sizeof(label), "Floor %d \xC2\xB7 %s",
+                     ov.floorNum, ov.floorName.c_str());
+            Line(th.textDim, label, th.text, dur);
+        }
+    }
+
+    // Line 3: room — running, frozen (✓ at the map device, until the next
+    // door click), or idle.
+    if (s.timerShowRoomLine) {
+        const char* roomName = (ov.roomLabel.empty() || ov.roomLabel == "?")
+                                   ? "?" : ov.roomLabel.c_str();
+        if (ov.roomOpen && ov.roomFrozen && !ov.runComplete) {
+            FmtDur(ov.roomFrozenDurationMs, dur, sizeof(dur));
+            snprintf(label, sizeof(label), "Room %d \xC2\xB7 %s \xE2\x9C\x93",
+                     ov.roomLayer + 1, roomName);
+            Line(th.good, label, th.good, dur);
+        } else if (ov.roomOpen && !ov.runComplete) {
+            FmtDur(nowMs > ov.roomStartMs ? nowMs - ov.roomStartMs : 0, dur, sizeof(dur));
+            snprintf(label, sizeof(label), "Room %d \xC2\xB7 %s", ov.roomLayer + 1, roomName);
+            Line(ov.roomIsBoss ? th.riskSevere : th.textDim, label, th.text, dur);
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text, th.textDim);
+            ImGui::TextUnformatted("Room \xC2\xB7 \xE2\x80\x94");
+            ImGui::PopStyleColor();
+        }
+    }
+}
+
+void DrawTimerOverlay(const PluginSDK::OverlayService& overlay, const RunTracker::Overlay& ov,
+                      Settings& s, uint64_t nowMs) {
     if (!s.timerOverlayEnabled) return;
     const bool linger = ov.runComplete && nowMs >= ov.runEndMs &&
                         nowMs - ov.runEndMs < kRunCompleteLinger;
@@ -37,65 +92,25 @@ void DrawTimerOverlay(const RunTracker::Overlay& ov, Settings& s, uint64_t nowMs
 
     Theme th = MakeTheme();
 
-    ImGui::SetNextWindowPos(s.timerOverlayPos, ImGuiCond_FirstUseEver);
+    // The host places the window, remembers its place in and out of the game and
+    // draws its gear menu (top-right corner on hover: lock, Game overlay mode,
+    // reset, close). timerOverlayPos only seeds its store once. Close clears
+    // timerOverlayEnabled.
+    PluginSDK::InfoWindowOptions o;
+    o.id = "timers";
+    o.title = nullptr;
+    o.flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize |
+              ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoFocusOnAppearing |
+              ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoSavedSettings;
+    o.defaultPos = ImVec2(40.0f, 40.0f);
+    o.legacyPos = s.timerOverlayPos;
+
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 8));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 3));
-    if (ImGui::Begin("##sekhema_timers", nullptr,
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize |
-                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoFocusOnAppearing |
-                     ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoSavedSettings)) {
-        s.timerOverlayPos = ImGui::GetWindowPos();   // drag persists via SaveSettings
-
-        char dur[40], label[96];
-
-        // Line 1: run (frozen at the final boss kill once completed)
-        if (ov.runComplete) {
-            FmtDur(ov.runEndMs - ov.runStartMs, dur, sizeof(dur));
-            Line(th.good, "RUN COMPLETE", th.good, dur);
-        } else {
-            FmtDur(nowMs > ov.runStartMs ? nowMs - ov.runStartMs : 0, dur, sizeof(dur));
-            Line(th.accent, "SEKHEMA", th.text, dur);
-        }
-
-        // Line 2: floor (locks in green for a few seconds after the boss kill)
-        if (s.timerShowFloorLine && ov.floorNum > 0) {
-            const bool locked = ov.lockedFloorNum > 0 && ov.floorBossKillMs > 0 &&
-                                nowMs >= ov.floorBossKillMs &&
-                                nowMs - ov.floorBossKillMs < kFloorLockShowMs;
-            if (locked) {
-                FmtDur(ov.lockedFloorDurationMs, dur, sizeof(dur));
-                snprintf(label, sizeof(label), "Floor %d \xE2\x9C\x93", ov.lockedFloorNum);
-                Line(th.good, label, th.good, dur);
-            } else {
-                FmtDur(nowMs > ov.floorStartMs ? nowMs - ov.floorStartMs : 0, dur, sizeof(dur));
-                snprintf(label, sizeof(label), "Floor %d \xC2\xB7 %s",
-                         ov.floorNum, ov.floorName.c_str());
-                Line(th.textDim, label, th.text, dur);
-            }
-        }
-
-        // Line 3: room — running, frozen (✓ at the map device, until the next
-        // door click), or idle.
-        if (s.timerShowRoomLine) {
-            const char* roomName = (ov.roomLabel.empty() || ov.roomLabel == "?")
-                                       ? "?" : ov.roomLabel.c_str();
-            if (ov.roomOpen && ov.roomFrozen && !ov.runComplete) {
-                FmtDur(ov.roomFrozenDurationMs, dur, sizeof(dur));
-                snprintf(label, sizeof(label), "Room %d \xC2\xB7 %s \xE2\x9C\x93",
-                         ov.roomLayer + 1, roomName);
-                Line(th.good, label, th.good, dur);
-            } else if (ov.roomOpen && !ov.runComplete) {
-                FmtDur(nowMs > ov.roomStartMs ? nowMs - ov.roomStartMs : 0, dur, sizeof(dur));
-                snprintf(label, sizeof(label), "Room %d \xC2\xB7 %s", ov.roomLayer + 1, roomName);
-                Line(ov.roomIsBoss ? th.riskSevere : th.textDim, label, th.text, dur);
-            } else {
-                ImGui::PushStyleColor(ImGuiCol_Text, th.textDim);
-                ImGui::TextUnformatted("Room \xC2\xB7 \xE2\x80\x94");
-                ImGui::PopStyleColor();
-            }
-        }
-    }
-    ImGui::End();
+    {
+        PluginSDK::InfoWindow window(overlay, o, &s.timerOverlayEnabled);
+        if (window) DrawTimerLines(th, ov, s, nowMs);
+    }   // the window ends here; its style is popped only after it
     ImGui::PopStyleVar(2);
 }
 

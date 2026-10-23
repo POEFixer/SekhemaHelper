@@ -1,8 +1,8 @@
 # SekhemaHelper — POE2Fixer Plugin
 
-Current version: 1.0.1
+Current version: 1.0.2
 
-Requires POE2Fixer 364 or newer.
+Requires POE2Fixer 366 or newer.
 
 A Trial of the Sekhemas helper for Path of Exile 2, built on the POE2Fixer
 v6 Plugin SDK. It scores every revealed room, recommends the optimal route

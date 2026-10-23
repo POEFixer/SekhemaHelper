@@ -1,5 +1,6 @@
 #include "DashboardUI.h"
 #include "Theme.h"
+#include "../../../POEFixer/plugin_sdk/PluginInfoWindow.h"
 #include <imgui.h>
 #include <algorithm>
 #include <cstdio>
@@ -103,16 +104,25 @@ static void DrawRoute(const Theme& th, const SekhemaFloor& floor) {
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "  %d rooms left", remaining);
 }
 
-void DrawDashboard(const SekhemaFloor& floor, const SekhemaResources& res, Settings& settings) {
+void DrawDashboard(const PluginSDK::OverlayService& overlay, const SekhemaFloor& floor,
+                   const SekhemaResources& res, Settings& settings) {
     if (!settings.dashboardVisible) return;
     Theme th = MakeTheme();
 
-    ImGui::SetNextWindowSize(ImVec2(340, 0), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowPos(settings.dashboardPos, ImGuiCond_FirstUseEver);
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
-    bool open = true;
-    if (ImGui::Begin("SekhemaHelper##dash", &open, flags)) {
-        settings.dashboardPos = ImGui::GetWindowPos();   // persist drag
+    // The host places the window, remembers its place in and out of the game and
+    // draws its gear menu (lock, Game overlay mode, reset, close). dashboardPos
+    // only seeds its store once. The title-bar X and the gear's Close clear
+    // dashboardVisible.
+    PluginSDK::InfoWindowOptions o;
+    o.id = "dashboard";
+    o.title = "SekhemaHelper";
+    o.flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
+    o.defaultPos = ImVec2(40.0f, 120.0f);
+    o.legacyPos = settings.dashboardPos;
+
+    ImGui::SetNextWindowSize(ImVec2(340, 0), ImGuiCond_FirstUseEver);   // auto-resized window
+    PluginSDK::InfoWindow window(overlay, o, &settings.dashboardVisible);
+    if (window) {
         if (res.valid) DrawResources(th, res);
 
         if (!floor.structurePresent) {
@@ -149,8 +159,6 @@ void DrawDashboard(const SekhemaFloor& floor, const SekhemaResources& res, Setti
             DrawRoute(th, floor);
         }
     }
-    ImGui::End();
-    if (!open) settings.dashboardVisible = false;        // window close button hides it
-}
+}   // the window ends here
 
 } // namespace sekhema
