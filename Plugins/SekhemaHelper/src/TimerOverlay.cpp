@@ -1,8 +1,10 @@
 #include "TimerOverlay.h"
 #include "Theme.h"
+#include "Text.h"
 #include "../../../POEFixer/plugin_sdk/PluginInfoWindow.h"
 #include <imgui.h>
 #include <cstdio>
+#include <string>
 
 namespace sekhema {
 
@@ -19,9 +21,9 @@ static void FmtDur(uint64_t ms, char* out, size_t n) {
 }
 
 // One overlay line: dim label + bright value, vertically consistent.
-static void Line(ImU32 labelCol, const char* label, ImU32 valueCol, const char* value) {
+static void Line(ImU32 labelCol, const std::string& label, ImU32 valueCol, const char* value) {
     ImGui::PushStyleColor(ImGuiCol_Text, labelCol);
-    ImGui::TextUnformatted(label);
+    ImGui::TextUnformatted(label.c_str());
     ImGui::PopStyleColor();
     ImGui::SameLine(0.0f, 8.0f);
     ImGui::PushStyleColor(ImGuiCol_Text, valueCol);
@@ -32,15 +34,17 @@ static void Line(ImU32 labelCol, const char* label, ImU32 valueCol, const char* 
 // The timer lines, inside the open window.
 static void DrawTimerLines(const Theme& th, const RunTracker::Overlay& ov, const Settings& s,
                            uint64_t nowMs) {
-    char dur[40], label[96];
+    char dur[40];
+    const std::string check = " \xE2\x9C\x93";   // " ✓"
+    const std::string dot = " \xC2\xB7 ";         // " · "
 
     // Line 1: run (frozen at the final boss kill once completed)
     if (ov.runComplete) {
         FmtDur(ov.runEndMs - ov.runStartMs, dur, sizeof(dur));
-        Line(th.good, "RUN COMPLETE", th.good, dur);
+        Line(th.good, I18n::Tr("timer_run_complete"), th.good, dur);
     } else {
         FmtDur(nowMs > ov.runStartMs ? nowMs - ov.runStartMs : 0, dur, sizeof(dur));
-        Line(th.accent, "SEKHEMA", th.text, dur);
+        Line(th.accent, I18n::Tr("timer_run"), th.text, dur);
     }
 
     // Line 2: floor (locks in green for a few seconds after the boss kill)
@@ -50,33 +54,33 @@ static void DrawTimerLines(const Theme& th, const RunTracker::Overlay& ov, const
                             nowMs - ov.floorBossKillMs < kFloorLockShowMs;
         if (locked) {
             FmtDur(ov.lockedFloorDurationMs, dur, sizeof(dur));
-            snprintf(label, sizeof(label), "Floor %d \xE2\x9C\x93", ov.lockedFloorNum);
-            Line(th.good, label, th.good, dur);
+            Line(th.good, I18n::TrF("timer_floor", { { "number", Num("%d", ov.lockedFloorNum) } }) + check,
+                 th.good, dur);
         } else {
             FmtDur(nowMs > ov.floorStartMs ? nowMs - ov.floorStartMs : 0, dur, sizeof(dur));
-            snprintf(label, sizeof(label), "Floor %d \xC2\xB7 %s",
-                     ov.floorNum, ov.floorName.c_str());
-            Line(th.textDim, label, th.text, dur);
+            Line(th.textDim, I18n::TrF("timer_floor", { { "number", Num("%d", ov.floorNum) } }) + dot +
+                 FloorName(ov.floorName), th.text, dur);
         }
     }
 
     // Line 3: room — running, frozen (✓ at the map device, until the next
     // door click), or idle.
     if (s.timerShowRoomLine) {
-        const char* roomName = (ov.roomLabel.empty() || ov.roomLabel == "?")
-                                   ? "?" : ov.roomLabel.c_str();
+        // The room's type ("Boss", "Hourglass", ...: the tracker keeps the English name).
+        const std::string roomName = (ov.roomLabel.empty() || ov.roomLabel == "?")
+                                   ? std::string("?") : RoomTypeName(ov.roomLabel);
         if (ov.roomOpen && ov.roomFrozen && !ov.runComplete) {
             FmtDur(ov.roomFrozenDurationMs, dur, sizeof(dur));
-            snprintf(label, sizeof(label), "Room %d \xC2\xB7 %s \xE2\x9C\x93",
-                     ov.roomLayer + 1, roomName);
-            Line(th.good, label, th.good, dur);
+            Line(th.good, I18n::TrF("timer_room", { { "number", Num("%d", ov.roomLayer + 1) } }) + dot +
+                 roomName + check, th.good, dur);
         } else if (ov.roomOpen && !ov.runComplete) {
             FmtDur(nowMs > ov.roomStartMs ? nowMs - ov.roomStartMs : 0, dur, sizeof(dur));
-            snprintf(label, sizeof(label), "Room %d \xC2\xB7 %s", ov.roomLayer + 1, roomName);
-            Line(ov.roomIsBoss ? th.riskSevere : th.textDim, label, th.text, dur);
+            Line(ov.roomIsBoss ? th.riskSevere : th.textDim,
+                 I18n::TrF("timer_room", { { "number", Num("%d", ov.roomLayer + 1) } }) + dot + roomName,
+                 th.text, dur);
         } else {
             ImGui::PushStyleColor(ImGuiCol_Text, th.textDim);
-            ImGui::TextUnformatted("Room \xC2\xB7 \xE2\x80\x94");
+            ImGui::TextUnformatted((std::string(I18n::Tr("timer_room_idle")) + dot + "\xE2\x80\x94").c_str());
             ImGui::PopStyleColor();
         }
     }

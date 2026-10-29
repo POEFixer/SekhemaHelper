@@ -1,5 +1,6 @@
 #include "DashboardUI.h"
 #include "Theme.h"
+#include "Text.h"
 #include "../../../POEFixer/plugin_sdk/PluginInfoWindow.h"
 #include <imgui.h>
 #include <algorithm>
@@ -12,7 +13,7 @@ namespace sekhema {
 static void DrawResources(const Theme& th, const SekhemaResources& res) {
     ImDrawList* dl = ImGui::GetWindowDrawList();
     // Honour bar
-    ImGui::TextUnformatted("HONOUR");
+    ImGui::TextUnformatted(I18n::Tr("dashboard_honour"));
     ImVec2 p = ImGui::GetCursorScreenPos();
     float w = ImGui::GetContentRegionAvail().x;
     float h = ImGui::GetTextLineHeight() * 1.1f;
@@ -28,9 +29,10 @@ static void DrawResources(const Theme& th, const SekhemaResources& res) {
     dl->AddText(ImVec2(p.x + (w - ts.x) * 0.5f, p.y + (h - ts.y) * 0.5f), th.text, buf);
     ImGui::Dummy(ImVec2(w, h));
     // Water + keys
-    ImGui::Text("Water  %d", res.sacredWater);
-    ImGui::SameLine(0, 24);
-    ImGui::Text("Keys  %d / %d / %d", res.keysBronze, res.keysSilver, res.keysGold);
+    Show(I18n::TrF("dashboard_water", { { "count", Num("%d", res.sacredWater) } }));
+    ImGui::SameLine(0, ImGui::GetFontSize() * 1.5f);
+    Show(I18n::TrF("dashboard_keys", { { "bronze", Num("%d", res.keysBronze) },
+        { "silver", Num("%d", res.keysSilver) }, { "gold", Num("%d", res.keysGold) } }));
     ImGui::Separator();
 }
 
@@ -44,7 +46,7 @@ static void DrawChoiceRow(const Theme& th, const SekhemaRoom& room, bool best, f
     // reward (+value) detail line
     std::string detail;
     if (!room.reward.empty()) {
-        detail = room.reward;
+        detail = RewardName(room.reward);
         if (room.rewardValue) { char b[24]; std::snprintf(b, sizeof(b), " +%d", room.rewardValue); detail += b; }
     }
 
@@ -56,9 +58,9 @@ static void DrawChoiceRow(const Theme& th, const SekhemaRoom& room, bool best, f
     ImGui::BeginGroup();
     {
         ImVec2 titlePos = ImGui::GetCursorScreenPos();
-        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(best ? th.accent : th.text),
-                           "%s%s", best ? ">> " : "",
-                           room.roomType.empty() ? "Room" : room.roomType.c_str());
+        const std::string title = std::string(best ? ">> " : "") +
+            (room.roomType.empty() ? std::string(I18n::Tr("dashboard_room")) : RoomTypeName(room.roomType));
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(best ? th.accent : th.text), "%s", title.c_str());
         // score, right-aligned (manual draw so it doesn't affect the group bounds)
         char sc[16]; std::snprintf(sc, sizeof(sc), "%.1f", displayScore);
         float scW = ImGui::CalcTextSize(sc).x;
@@ -86,7 +88,7 @@ static void DrawChoiceRow(const Theme& th, const SekhemaRoom& room, bool best, f
 }
 
 static void DrawRoute(const Theme& th, const SekhemaFloor& floor) {
-    ImGui::TextUnformatted("ROUTE TO BOSS");
+    ImGui::TextUnformatted(I18n::Tr("dashboard_route"));
     std::string strip;
     int remaining = 0;
     for (size_t L = 0; L < floor.layers.size(); ++L) {
@@ -100,8 +102,9 @@ static void DrawRoute(const Theme& th, const SekhemaFloor& floor) {
         if ((int)L > floor.playerLayer) ++remaining;
     }
     ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.text), "%s", strip.c_str());
-    ImGui::SameLine();
-    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "  %d rooms left", remaining);
+    ImGui::SameLine(0.0f, ImGui::GetFontSize());
+    const std::string left = I18n::TrF("dashboard_rooms_left", { { "count", Num("%d", remaining) } });
+    ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "%s", left.c_str());
 }
 
 void DrawDashboard(const PluginSDK::OverlayService& overlay, const SekhemaFloor& floor,
@@ -128,15 +131,15 @@ void DrawDashboard(const PluginSDK::OverlayService& overlay, const SekhemaFloor&
         if (!floor.structurePresent) {
             // Reachable only inside a Sanctum_N zone (the caller gates on that)
             // while the Trial-Map panel hasn't structurally resolved yet.
-            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "Resolving Trial Map...");
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "%s", I18n::Tr("dashboard_resolving"));
         } else if (!floor.valid) {
             // Trial floor detected, but its rooms are hidden on the Trial Map
             // (relic "The Burden of Leadership"). Resources (above) still work;
             // room identities reveal as you enter them.
-            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "Rooms hidden on the Trial Map");
-            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "(rooms reveal as you enter them)");
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "%s", I18n::Tr("dashboard_rooms_hidden"));
+            ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(th.textDim), "%s", I18n::Tr("dashboard_rooms_hidden_hint"));
         } else {
-            ImGui::TextUnformatted("NEXT ROOM - take the highlighted");
+            ImGui::TextUnformatted(I18n::Tr("dashboard_next_room"));
             auto choices = floor.Choices();
             // Score each choice by its path value to the boss (so the highlighted
             // best-path room is the highest number), normalized among the choices.

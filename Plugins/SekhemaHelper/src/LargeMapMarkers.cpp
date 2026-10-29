@@ -1,5 +1,6 @@
 #include "LargeMapMarkers.h"
 #include "ChestTypes.h"
+#include "Text.h"
 #include <imgui.h>
 #include <cmath>
 #include <cstdio>
@@ -144,10 +145,11 @@ static void DrawOn(ImDrawList* dl, bool large, float playerZ,
                 dl->AddConvexPolyFilled(pts, 4, col);
                 dl->AddPolyline(pts, 4, IM_COL32(0, 0, 0, 180), 1.5f, ImDrawFlags_Closed);
                 if (labels) {
-                    ImVec2 ts = ImGui::CalcTextSize("EXIT");
+                    const char* exitLabel = I18n::Tr("map_exit");
+                    ImVec2 ts = ImGui::CalcTextSize(exitLabel);
                     ImVec2 tp(dp.x - ts.x * 0.5f, dp.y + r + 1.0f);
-                    dl->AddText(ImVec2(tp.x + 1, tp.y + 1), IM_COL32(0, 0, 0, 200), "EXIT");
-                    dl->AddText(tp, IM_COL32(255, 255, 255, 235), "EXIT");
+                    dl->AddText(ImVec2(tp.x + 1, tp.y + 1), IM_COL32(0, 0, 0, 200), exitLabel);
+                    dl->AddText(tp, IM_COL32(255, 255, 255, 235), exitLabel);
                 }
             }
         }
@@ -188,14 +190,12 @@ static void DrawOn(ImDrawList* dl, bool large, float playerZ,
         if (labels && s.showChestLabels) {
             for (const auto& d : drawn) {
                 const ChestTypeInfo* info = FindChestTypeInfo(d.m->label);
-                const char* base = info ? info->mapLabel : d.m->label.c_str();
-                char text[48];
-                std::snprintf(text, sizeof(text), "%s%s", base,
-                              d.m->quality == 2 ? "+" : d.m->quality == 3 ? "++" : "");
-                ImVec2 ts = ImGui::CalcTextSize(text);
+                const std::string text = ChestLabel(d.m->label, info ? info->mapLabel : d.m->label) +
+                    (d.m->quality == 2 ? "+" : d.m->quality == 3 ? "++" : "");
+                ImVec2 ts = ImGui::CalcTextSize(text.c_str());
                 ImVec2 tp(d.p.x - ts.x * 0.5f, d.p.y + cr + 1.0f);
-                dl->AddText(ImVec2(tp.x + 1, tp.y + 1), IM_COL32(0, 0, 0, 210), text);
-                dl->AddText(tp, TierLabelColor(d.m->chestTier), text);
+                dl->AddText(ImVec2(tp.x + 1, tp.y + 1), IM_COL32(0, 0, 0, 210), text.c_str());
+                dl->AddText(tp, TierLabelColor(d.m->chestTier), text.c_str());
             }
         }
         // Pass 3: highlight rings on top of circles AND labels.
@@ -207,13 +207,13 @@ static void DrawOn(ImDrawList* dl, bool large, float playerZ,
         for (const auto& m : ents.portals) {
             ImVec2 sp;
             if (projM(m, sp)) Marker(dl, sp, ImGui::ColorConvertFloat4ToU32(s.portalColor),
-                                     pr, labels ? "Portal" : nullptr, false);
+                                     pr, labels ? I18n::Tr("map_portal") : nullptr, false);
         }
     if (s.showLevers)
         for (const auto& m : ents.levers) {
             ImVec2 sp;
             if (projM(m, sp)) Marker(dl, sp, ImGui::ColorConvertFloat4ToU32(s.leverColor),
-                                     pr, labels ? "Lever" : nullptr, false);
+                                     pr, labels ? I18n::Tr("map_lever") : nullptr, false);
         }
 }
 

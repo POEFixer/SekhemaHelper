@@ -1,0 +1,9 @@
+# Keys SekhemaHelper builds at run time from its own English catalogs (src/I18nKeys.h);
+# tests/test_i18n.cpp checks every key it builds against lang/en.json.
+affliction_name_
+affliction_desc_
+room_
+reward_
+floor_
+chest_name_
+chest_label_

@@ -9,6 +9,7 @@
 // lived in DrawUI). Bridge calls are thread-safe (SEH-wrapped RPM / host
 // snapshot copies); ImGui stays render-only.
 #include "../../../POEFixer/plugin_sdk/PluginSDK.h"
+#include "lang_en.generated.h"   // the embedded English: once per DLL, after PluginSDK.h (Text.h)
 #include "Settings.h"
 #include "Engine.h"
 #include "RoomClassifier.h"
@@ -76,8 +77,7 @@ static int ParseFloorFromAreaId(const std::string& id) {
 // Floor tileset name from its number (inverse of FloorNumFromTileset) — labels
 // the floor when the tileset itself is hidden with the room content.
 static const char* FloorNameFromNum(int n) {
-    switch (n) { case 1: return "Caverns"; case 2: return "Ruins";
-                 case 3: return "Depths";  case 4: return "Abyss"; default: return ""; }
+    return (n >= 1 && n <= 4) ? kFloorTilesets[n - 1] : "";
 }
 
 // One worker iteration's published state. The render thread copies it once per
@@ -816,6 +816,6 @@ extern "C" PLUGIN_API void               DestroyPlugin(PluginSDK::Plugin* p) { d
 POEFIXER_PLUGIN_INFO(
     "SekhemaHelper",
     "Sekhema Helper",
-    "1.0.2",
+    "1.0.3",
     "POEFixer",
     "Trial of the Sekhemas helper: scores every room, recommends the best route to the boss and marks it on the in-game map.")

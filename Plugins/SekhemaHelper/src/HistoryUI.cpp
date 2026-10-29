@@ -1,7 +1,9 @@
 #include "HistoryUI.h"
 #include "Theme.h"
+#include "Text.h"
 #include <imgui.h>
 #include <cstdio>
+#include <string>
 
 namespace sekhema {
 
@@ -23,7 +25,7 @@ static bool DeleteButton(const Theme& th) {
     ImGui::PushStyleColor(ImGuiCol_Text, th.textDim);
     bool clicked = ImGui::SmallButton("\xE2\x9C\x95");
     ImGui::PopStyleColor(4);
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Delete this run");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", I18n::Tr("history_delete_run"));
     return clicked;
 }
 
@@ -34,20 +36,32 @@ static ImU32 StatusColor(const Theme& th, const std::string& s) {
     return th.accent;   // in_progress
 }
 
+// A run's stored status ("completed", ...: an identity in the database) as text.
+static std::string StatusText(const std::string& s) {
+    if (s == "completed")   return I18n::Tr("history_status_completed");
+    if (s == "failed")      return I18n::Tr("history_status_failed");
+    if (s == "abandoned")   return I18n::Tr("history_status_abandoned");
+    if (s == "in_progress") return I18n::Tr("history_status_in_progress");
+    return s;
+}
+
 static void DrawRoomsTable(const std::vector<RunDatabase::RoomRow>& rooms, const Theme& th) {
     if (rooms.empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, th.textDim);
-        ImGui::TextUnformatted("  (no rooms recorded)");
+        ImGui::Indent();
+        ImGui::TextUnformatted(I18n::Tr("history_no_rooms"));
+        ImGui::Unindent();
         ImGui::PopStyleColor();
         return;
     }
     if (ImGui::BeginTable("rooms", 5,
             ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_SizingStretchProp)) {
-        ImGui::TableSetupColumn("#",          ImGuiTableColumnFlags_WidthFixed, 28.0f);
-        ImGui::TableSetupColumn("Type",       ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Affliction", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Reward",     ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("Time",       ImGuiTableColumnFlags_WidthFixed, 88.0f);
+        // Fixed columns without a width fit their (translated) header and cells every frame.
+        ImGui::TableSetupColumn("#",                                  ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn(I18n::TrId("history_col_type"),       ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn(I18n::TrId("history_col_affliction"), ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn(I18n::TrId("history_col_reward"),     ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn(I18n::TrId("history_col_time"),       ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableHeadersRow();
         char dur[32];
         for (const auto& r : rooms) {
@@ -56,13 +70,13 @@ static void DrawRoomsTable(const std::vector<RunDatabase::RoomRow>& rooms, const
             ImGui::TableNextColumn();
             if (r.isBoss) {
                 ImGui::PushStyleColor(ImGuiCol_Text, th.riskSevere);
-                ImGui::TextUnformatted(r.type.empty() ? "Boss" : r.type.c_str());
+                ImGui::TextUnformatted(r.type.empty() ? I18n::Tr("room_boss") : RoomTypeName(r.type).c_str());
                 ImGui::PopStyleColor();
             } else {
-                ImGui::TextUnformatted(r.type.empty() ? "?" : r.type.c_str());
+                ImGui::TextUnformatted(r.type.empty() ? "?" : RoomTypeName(r.type).c_str());
             }
-            ImGui::TableNextColumn(); ImGui::TextUnformatted(r.affliction.c_str());
-            ImGui::TableNextColumn(); ImGui::TextUnformatted(r.reward.c_str());
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(AfflictionName(r.affliction).c_str());
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(RewardName(r.reward).c_str());
             ImGui::TableNextColumn();
             FmtDurMs(r.durationMs, dur, sizeof(dur));
             ImGui::TextUnformatted(dur);
@@ -76,12 +90,16 @@ static void DrawFloorsTable(RunDatabase& db, HistoryUIState& st, const Theme& th
     for (const auto& f : st.floors) {
         ImGui::PushID(static_cast<int>(f.id));
         const bool open = (st.expandedFloor == f.id);
-        char label[128];
         FmtDurMs(f.durationMs, dur, sizeof(dur));
-        snprintf(label, sizeof(label), "%s Floor %d \xC2\xB7 %s   %s   (%d rooms)%s",
-                 open ? "\xE2\x96\xBE" : "\xE2\x96\xB8", f.floorNum, f.floorName.c_str(), dur,
-                 f.roomsCleared, f.bossKilledMs >= 0 ? "  \xE2\x9C\x93 boss" : "");
-        if (ImGui::Selectable(label, open)) {
+        // "Floor 2 · Ruins   01:23.456   (5 rooms)  boss" with the arrow and check glyphs;
+        // the row's id stays "###floor" in every language.
+        std::string label = std::string(open ? "\xE2\x96\xBE " : "\xE2\x96\xB8 ") +
+            I18n::TrF("history_floor", { { "number", Num("%d", f.floorNum) } }) + " \xC2\xB7 " +
+            FloorName(f.floorName) + "   " + dur + "   (" +
+            I18n::TrF("history_floor_rooms", { { "count", Num("%d", f.roomsCleared) } }) + ")";
+        if (f.bossKilledMs >= 0) label += std::string("  \xE2\x9C\x93 ") + I18n::Tr("history_floor_boss");
+        label += "###floor";
+        if (ImGui::Selectable(label.c_str(), open)) {
             if (open) { st.expandedFloor = -1; st.rooms.clear(); }
             else      { st.expandedFloor = f.id; st.rooms = db.QueryRooms(f.id); }
         }
@@ -112,23 +130,24 @@ void DrawHistoryTab(RunDatabase& db, HistoryUIState& st) {
         FmtDurMs(st.stats.avgMs, avg, sizeof(avg));
         int pct = st.stats.total > 0 ? (st.stats.completed * 100) / st.stats.total : 0;
         ImGui::PushStyleColor(ImGuiCol_Text, th.textDim);
-        ImGui::TextUnformatted("Runs"); ImGui::SameLine(); ImGui::PopStyleColor();
-        ImGui::Text("%d", st.stats.total); ImGui::SameLine(0, 18);
+        const float gap = ImGui::GetFontSize();
+        ImGui::TextUnformatted(I18n::Tr("history_runs")); ImGui::SameLine(); ImGui::PopStyleColor();
+        ImGui::Text("%d", st.stats.total); ImGui::SameLine(0, gap);
         ImGui::PushStyleColor(ImGuiCol_Text, th.textDim);
-        ImGui::TextUnformatted("Completed"); ImGui::SameLine(); ImGui::PopStyleColor();
-        ImGui::Text("%d (%d%%)", st.stats.completed, pct); ImGui::SameLine(0, 18);
+        ImGui::TextUnformatted(I18n::Tr("history_completed")); ImGui::SameLine(); ImGui::PopStyleColor();
+        ImGui::Text("%d (%d%%)", st.stats.completed, pct); ImGui::SameLine(0, gap);
         ImGui::PushStyleColor(ImGuiCol_Text, th.textDim);
-        ImGui::TextUnformatted("Best"); ImGui::SameLine(); ImGui::PopStyleColor();
-        ImGui::TextUnformatted(best); ImGui::SameLine(0, 18);
+        ImGui::TextUnformatted(I18n::Tr("history_best")); ImGui::SameLine(); ImGui::PopStyleColor();
+        ImGui::TextUnformatted(best); ImGui::SameLine(0, gap);
         ImGui::PushStyleColor(ImGuiCol_Text, th.textDim);
-        ImGui::TextUnformatted("Avg"); ImGui::SameLine(); ImGui::PopStyleColor();
+        ImGui::TextUnformatted(I18n::Tr("history_average")); ImGui::SameLine(); ImGui::PopStyleColor();
         ImGui::TextUnformatted(avg);
     }
     ImGui::Separator();
 
     if (st.runs.empty()) {
         ImGui::PushStyleColor(ImGuiCol_Text, th.textDim);
-        ImGui::TextUnformatted("No runs recorded yet — enter the Trial of the Sekhemas.");
+        ImGui::TextUnformatted(I18n::Tr("history_empty"));
         ImGui::PopStyleColor();
         return;
     }
@@ -137,12 +156,13 @@ void DrawHistoryTab(RunDatabase& db, HistoryUIState& st) {
     if (ImGui::BeginTable("runs", 6,
             ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH |
             ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_PadOuterX)) {
-        ImGui::TableSetupColumn("Date",      ImGuiTableColumnFlags_WidthFixed, 150.0f);
-        ImGui::TableSetupColumn("Status",    ImGuiTableColumnFlags_WidthFixed, 92.0f);
-        ImGui::TableSetupColumn("Duration",  ImGuiTableColumnFlags_WidthFixed, 92.0f);
-        ImGui::TableSetupColumn("Floors",    ImGuiTableColumnFlags_WidthFixed, 52.0f);
-        ImGui::TableSetupColumn("Character", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableSetupColumn("##del",     ImGuiTableColumnFlags_WidthFixed, 26.0f);
+        // Fixed columns without a width fit their (translated) header and cells every frame.
+        ImGui::TableSetupColumn(I18n::TrId("history_col_date"),      ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn(I18n::TrId("history_col_status"),    ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn(I18n::TrId("history_col_duration"),  ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn(I18n::TrId("history_col_floors"),    ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn(I18n::TrId("history_col_character"), ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("##del",                             ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableHeadersRow();
 
         char dur[32];
@@ -163,7 +183,7 @@ void DrawHistoryTab(RunDatabase& db, HistoryUIState& st) {
 
             ImGui::TableNextColumn();
             ImGui::PushStyleColor(ImGuiCol_Text, StatusColor(th, r.status));
-            ImGui::TextUnformatted(r.status.c_str());
+            ImGui::TextUnformatted(StatusText(r.status).c_str());
             ImGui::PopStyleColor();
 
             ImGui::TableNextColumn();
@@ -174,8 +194,11 @@ void DrawHistoryTab(RunDatabase& db, HistoryUIState& st) {
             ImGui::Text("%d/%d", r.floorsDone, r.lastFloor > 0 ? r.lastFloor : r.floorsDone);
 
             ImGui::TableNextColumn();
-            if (r.areaLevel > 0) ImGui::Text("%s (lvl %d)", r.charName.c_str(), r.areaLevel);
-            else                 ImGui::TextUnformatted(r.charName.c_str());
+            if (r.areaLevel > 0)
+                Show(I18n::TrF("history_character_level", { { "name", r.charName },
+                    { "level", Num("%d", r.areaLevel) } }));
+            else
+                ImGui::TextUnformatted(r.charName.c_str());
 
             ImGui::TableNextColumn();
             if (DeleteButton(th)) deleteId = r.id;
@@ -199,13 +222,13 @@ void DrawHistoryTab(RunDatabase& db, HistoryUIState& st) {
     // Clear-all with inline confirm (no modal — overlay-mode clickthrough trap)
     ImGui::Separator();
     if (!st.confirmClear) {
-        if (ImGui::Button("Clear history")) st.confirmClear = true;
+        if (ImGui::Button(I18n::TrId("history_clear"))) st.confirmClear = true;
     } else {
         ImGui::PushStyleColor(ImGuiCol_Text, th.riskSevere);
-        ImGui::TextUnformatted("Delete ALL recorded runs?");
+        ImGui::TextUnformatted(I18n::Tr("history_clear_confirm"));
         ImGui::PopStyleColor();
         ImGui::SameLine();
-        if (ImGui::Button("Delete all")) {
+        if (ImGui::Button(I18n::TrId("history_delete_all"))) {
             db.ClearAll();
             st.expandedRun = -1; st.expandedFloor = -1;
             st.floors.clear(); st.rooms.clear();
@@ -213,7 +236,7 @@ void DrawHistoryTab(RunDatabase& db, HistoryUIState& st) {
             st.confirmClear = false;
         }
         ImGui::SameLine();
-        if (ImGui::Button("Cancel")) st.confirmClear = false;
+        if (ImGui::Button(I18n::TrId("history_cancel"))) st.confirmClear = false;
     }
 }
 

@@ -40,12 +40,14 @@ inline std::string ExtractRoomType(const std::string& id) {
     return tok; // Ritual / Gauntlet / Boss already match their display name
 }
 
+// The floor tilesets in SanctumFloors.dat order: floor N is kFloorTilesets[N - 1]. The
+// names are identities (run history, floor labels); Text.h shows them as text.
+inline constexpr const char* kFloorTilesets[] = { "Caverns", "Ruins", "Depths", "Abyss" };
+
 // "Caverns"=1, "Ruins"=2, "Depths"=3, "Abyss"=4, else 0 (SanctumFloors.dat order).
 inline int FloorNumFromTileset(const std::string& t) {
-    if (t == "Caverns") return 1;
-    if (t == "Ruins")   return 2;
-    if (t == "Depths")  return 3;
-    if (t == "Abyss")   return 4;
+    for (int i = 0; i < 4; ++i)
+        if (t == kFloorTilesets[i]) return i + 1;
     return 0;
 }
 
